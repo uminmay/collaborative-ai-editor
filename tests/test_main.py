@@ -34,16 +34,20 @@ def test_api_structure(test_client):
 
 def test_create_folder(test_client):
     """Test folder creation"""
-    response = test_client.post("/api/create", 
-        json={"name": "test_folder", "type": "folder", "path": "/"})
+    response = test_client.post(
+        "/api/create", 
+        json={"name": "test_folder", "type": "folder", "path": "/"}
+    )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
     assert Path("editor_files/test_folder").is_dir()
 
 def test_create_file(test_client):
     """Test file creation"""
-    response = test_client.post("/api/create", 
-        json={"name": "test.txt", "type": "file", "path": "/"})
+    response = test_client.post(
+        "/api/create", 
+        json={"name": "test.txt", "type": "file", "path": "/"}
+    )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
     assert Path("editor_files/test.txt").is_file()
@@ -54,8 +58,12 @@ def test_delete_file(test_client):
     test_file = Path("editor_files/to_delete.txt")
     test_file.touch()
     
-    response = test_client.delete("/api/delete", 
-        json={"path": "to_delete.txt"})
+    # For DELETE requests, we need to send data differently
+    response = test_client.delete(
+        "/api/delete",
+        content=json.dumps({"path": "to_delete.txt"}),
+        headers={"Content-Type": "application/json"}
+    )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
     assert not test_file.exists()
@@ -66,8 +74,12 @@ def test_delete_folder(test_client):
     test_folder = Path("editor_files/to_delete_folder")
     test_folder.mkdir(exist_ok=True)
     
-    response = test_client.delete("/api/delete", 
-        json={"path": "to_delete_folder"})
+    # For DELETE requests, we need to send data differently
+    response = test_client.delete(
+        "/api/delete",
+        content=json.dumps({"path": "to_delete_folder"}),
+        headers={"Content-Type": "application/json"}
+    )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
     assert not test_folder.exists()

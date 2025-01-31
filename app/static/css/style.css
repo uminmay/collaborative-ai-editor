@@ -14,6 +14,62 @@ body {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* Project List Styles */
+h1 {
+    color: #333;
+    margin-bottom: 1.5rem;
+}
+
+.folder-structure {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.folder-item, .file-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.folder-item:hover, .file-item:hover {
+    background-color: #f8f9fa;
+}
+
+.folder-item.selected, .file-item.selected {
+    background-color: #e3f2fd;
+}
+
+.item-icon {
+    margin-right: 0.5rem;
+    font-size: 1.2rem;
+}
+
+.item-name {
+    flex-grow: 1;
+}
+
+.delete-button {
+    opacity: 0;
+    transition: opacity 0.2s;
+    color: #dc3545;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+}
+
+.folder-item:hover .delete-button,
+.file-item:hover .delete-button {
+    opacity: 1;
+}
+
+.delete-button:hover {
+    background-color: #ffebee;
+}
+
+/* Editor Styles */
 .toolbar {
     margin-bottom: 20px;
     display: flex;
@@ -71,33 +127,22 @@ body {
     box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
 }
 
-/* Folder Structure Styles */
-.folder-structure {
-    padding: 20px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.create-new {
-    margin-bottom: 20px;
-}
-
-.create-new form {
+/* Form Styles */
+.create-form {
+    margin-bottom: 1rem;
     display: flex;
-    gap: 10px;
-    margin-top: 10px;
+    gap: 0.5rem;
 }
 
-.create-new input,
-.create-new select {
-    padding: 8px;
+.create-form input,
+.create-form select {
+    padding: 0.5rem;
     border: 1px solid #ddd;
     border-radius: 4px;
 }
 
-.create-new button {
-    padding: 8px 16px;
+.create-form button {
+    padding: 0.5rem 1rem;
     background-color: #007bff;
     color: white;
     border: none;
@@ -105,46 +150,16 @@ body {
     cursor: pointer;
 }
 
-.create-new button:hover {
+.create-form button:hover {
     background-color: #0056b3;
 }
 
-.tree-item {
-    padding: 8px;
-    margin: 2px 0;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.tree-item:hover {
-    background-color: #f8f9fa;
-}
-
-.tree-item .icon {
-    width: 20px;
-    text-align: center;
-}
-
-.tree-item .name {
-    flex-grow: 1;
-    cursor: pointer;
-}
-
-.tree-item .delete {
-    opacity: 0;
-    transition: opacity 0.2s;
-}
-
-.tree-item:hover .delete {
-    opacity: 1;
-}
-
+/* Error Message Styles */
 .error-message {
-    padding: 10px;
-    background-color: #fee;
-    color: #c00;
+    padding: 0.75rem;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
     border-radius: 4px;
-    margin-bottom: 20px;
+    color: #721c24;
+    margin-bottom: 1rem;
 }

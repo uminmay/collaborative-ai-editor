@@ -3,10 +3,12 @@ const { useState, useEffect } = React;
 function FolderStructure() {
     const [structure, setStructure] = useState({});
     const [error, setError] = useState('');
+    const [expandedPaths, setExpandedPaths] = useState(new Set());
     const [selectedPath, setSelectedPath] = useState('');
     const [newItemName, setNewItemName] = useState('');
     const [showNewItemInput, setShowNewItemInput] = useState(false);
     const [newItemType, setNewItemType] = useState('');
+    const [currentPath, setCurrentPath] = useState('');
 
     useEffect(() => {
         fetchStructure();
@@ -19,7 +21,7 @@ function FolderStructure() {
             const data = await response.json();
             setStructure(data);
         } catch (err) {
-            setError('Failed to load folder structure');
+            setError('Failed to load project structure');
         }
     };
 
@@ -27,7 +29,17 @@ function FolderStructure() {
         if (type === 'file') {
             window.location.href = `/editor?path=${encodeURIComponent(path)}`;
         } else {
-            setSelectedPath(path === selectedPath ? '' : path);
+            setExpandedPaths(prev => {
+                const newPaths = new Set(prev);
+                if (newPaths.has(path)) {
+                    newPaths.delete(path);
+                } else {
+                    newPaths.add(path);
+                }
+                return newPaths;
+            });
+            setSelectedPath(path);
+            setCurrentPath(path);
         }
     };
 
@@ -35,14 +47,24 @@ function FolderStructure() {
         e.preventDefault();
         if (!newItemName) return;
 
+        // For root level, always create a folder (project)
+        const isRoot = !currentPath;
+        const itemType = isRoot ? 'folder' : newItemType;
+
+        // Check for duplicate project names at root level
+        if (isRoot && structure[newItemName]) {
+            setError('A project with this name already exists');
+            return;
+        }
+
         try {
             const response = await fetch('/api/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: newItemName,
-                    type: newItemType,
-                    path: selectedPath || '/'
+                    type: itemType,
+                    path: currentPath || '/'
                 })
             });
 
@@ -50,13 +72,20 @@ function FolderStructure() {
             
             setNewItemName('');
             setShowNewItemInput(false);
+            setNewItemType('');
             fetchStructure();
+
+            // Auto-expand the parent folder
+            if (currentPath) {
+                setExpandedPaths(prev => new Set([...prev, currentPath]));
+            }
         } catch (err) {
             setError('Failed to create new item');
         }
     };
 
-    const handleDelete = async (path) => {
+    const handleDelete = async (e, path) => {
+        e.stopPropagation();
         if (!confirm('Are you sure you want to delete this item?')) return;
 
         try {
@@ -68,53 +97,36 @@ function FolderStructure() {
 
             if (!response.ok) throw new Error('Failed to delete item');
             fetchStructure();
+            
+            if (selectedPath.startsWith(path)) {
+                setSelectedPath('');
+                setCurrentPath('');
+            }
         } catch (err) {
             setError('Failed to delete item');
         }
     };
 
-    const renderTree = (node, path = '') => {
-        return Object.entries(node).map(([key, value]) => {
-            const currentPath = path ? `${path}/${key}` : key;
-            const isFolder = typeof value === 'object';
-            
-            return React.createElement('div', { key: currentPath, className: 'ml-4' },
-                React.createElement('div', { 
-                    className: 'flex items-center gap-2 py-1 hover:bg-gray-100 rounded px-2' 
-                },
-                    React.createElement('span', { 
-                        className: `w-4 h-4 ${isFolder ? 'text-blue-500' : 'text-gray-500'}`
-                    }, isFolder ? '📁' : '📄'),
-                    React.createElement('span', {
-                        className: 'cursor-pointer flex-grow',
-                        onClick: () => handleSelect(currentPath, isFolder ? 'folder' : 'file')
-                    }, key),
-                    React.createElement('span', {
-                        className: 'text-red-500 cursor-pointer hover:text-red-700',
-                        onClick: () => handleDelete(currentPath)
-                    }, '🗑️')
-                ),
-                isFolder && selectedPath.startsWith(currentPath) && 
-                    React.createElement('div', { className: 'ml-4' }, 
-                        renderTree(value, currentPath)
-                    )
-            );
-        });
+    const getIndentLevel = (path) => {
+        return path ? path.split('/').length - 1 : 0;
     };
 
-    return React.createElement('div', { className: 'p-4' },
-        error && React.createElement('div', { 
-            className: 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4' 
-        }, error),
-        
-        React.createElement('div', { className: 'flex items-center gap-2 mb-4' },
+    const renderCreateButton = () => {
+        const isRoot = !currentPath;
+        return React.createElement('div', { className: 'flex items-center gap-2 mb-4' },
             React.createElement('button', {
                 className: 'bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600',
-                onClick: () => setShowNewItemInput(true)
-            }, '+ New')
-        ),
+                onClick: () => {
+                    setShowNewItemInput(true);
+                    setNewItemType(isRoot ? 'folder' : '');
+                }
+            }, isRoot ? '+ New Project' : '+ New')
+        );
+    };
 
-        showNewItemInput && React.createElement('form', {
+    const renderForm = () => {
+        const isRoot = !currentPath;
+        return React.createElement('form', {
             onSubmit: handleCreate,
             className: 'mb-4 flex gap-2'
         },
@@ -122,10 +134,10 @@ function FolderStructure() {
                 type: 'text',
                 value: newItemName,
                 onChange: (e) => setNewItemName(e.target.value),
-                placeholder: 'Name',
+                placeholder: isRoot ? 'Project Name' : 'Name',
                 className: 'border p-1 rounded'
             }),
-            React.createElement('select', {
+            !isRoot && React.createElement('select', {
                 value: newItemType,
                 onChange: (e) => setNewItemType(e.target.value),
                 className: 'border p-1 rounded'
@@ -138,10 +150,69 @@ function FolderStructure() {
                 type: 'submit',
                 className: 'bg-blue-500 text-white px-2 py-1 rounded'
             }, 'Create')
-        ),
+        );
+    };
 
-        React.createElement('div', { className: 'border rounded p-4' },
-            renderTree(structure)
+    const renderTree = (node, path = '') => {
+        return Object.entries(node).map(([key, value]) => {
+            const currentPath = path ? `${path}/${key}` : key;
+            const isFolder = typeof value === 'object';
+            const isExpanded = expandedPaths.has(currentPath);
+            const isSelected = selectedPath === currentPath;
+            const indentLevel = getIndentLevel(currentPath);
+            
+            return React.createElement('div', { 
+                key: currentPath,
+                className: 'group'
+            },
+                React.createElement('div', { 
+                    className: `flex items-center gap-2 py-2 px-2 rounded cursor-pointer 
+                              ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-100'}
+                              ${indentLevel === 0 ? 'font-semibold' : ''}`,
+                    onClick: () => handleSelect(currentPath, isFolder ? 'folder' : 'file'),
+                    style: { marginLeft: `${indentLevel * 16}px` }
+                },
+                    React.createElement('span', { 
+                        className: `${isFolder ? 'text-blue-500' : 'text-gray-500'}`
+                    }, isFolder ? (isExpanded ? '📂' : '📁') : '📄'),
+                    React.createElement('span', {
+                        className: 'flex-grow'
+                    }, key),
+                    React.createElement('button', {
+                        className: 'invisible group-hover:visible text-red-500 hover:text-red-700',
+                        onClick: (e) => handleDelete(e, currentPath)
+                    }, '🗑️')
+                ),
+                isFolder && isExpanded && value && 
+                    renderTree(value, currentPath)
+            );
+        });
+    };
+
+    return React.createElement('div', { className: 'p-4' },
+        React.createElement('h1', { 
+            className: 'text-2xl font-bold mb-4'
+        }, 'Projects List'),
+
+        error && React.createElement('div', { 
+            className: 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 flex justify-between items-center',
+        }, 
+            React.createElement('span', {}, error),
+            React.createElement('button', {
+                className: 'text-red-700 hover:text-red-900',
+                onClick: () => setError('')
+            }, '×')
+        ),
+        
+        renderCreateButton(),
+        showNewItemInput && renderForm(),
+
+        React.createElement('div', { 
+            className: 'border rounded p-4'
+        },
+            Object.keys(structure).length === 0 
+                ? React.createElement('p', { className: 'text-gray-500' }, 'No projects yet. Create one to get started!')
+                : renderTree(structure)
         )
     );
 }
