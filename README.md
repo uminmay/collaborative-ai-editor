@@ -1,4 +1,3 @@
-# README.md
 # Collaborative AI Editor
 
 A basic real-time code editor built with FastAPI and WebSockets.
@@ -20,6 +19,14 @@ The editor will be available at http://localhost:8000
 
 ## Development
 
+### Branch Strategy
+1. All development work should be done in feature branches
+2. Feature branches should be merged into the `test` branch
+3. The `test` branch automatically runs tests
+4. When tests pass on the `test` branch, a PR is automatically created to merge into `master`
+5. After review, merge the PR to deploy to both test and production environments
+
+### Project Structure
 - The editor files are stored in the `editor_files` directory
 - Static files are in `app/static`
 - Templates are in `app/templates`
@@ -41,5 +48,3 @@ Run tests with:
 ```bash
 pytest
 ```
-
-

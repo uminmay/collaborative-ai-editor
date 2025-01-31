@@ -2,9 +2,9 @@ name: Test
 
 on:
   push:
-    branches: [ master ]
+    branches: [ test, master ]
   pull_request:
-    branches: [ master ]
+    branches: [ test, master ]
 
 jobs:
   test:
@@ -22,7 +22,26 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install pytest
+        pip install -e .
     
     - name: Run tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}
       run: |
-        pytest
+        pytest tests/ -v
+
+    - name: Create Pull Request to master
+      # Only create PR if we're on test branch and tests passed
+      if: success() && github.ref == 'refs/heads/test'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.PAT_GITHUB }}
+        commit-message: 'Automated PR from test to master'
+        branch: test-to-master
+        delete-branch: true
+        title: 'Merge test into master'
+        body: 'All tests have passed. Ready to merge into master.'
+        base: 'master'
+        head: 'test'
+

@@ -1,0 +1,14 @@
+# docker-compose.prod.yml
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./app:/app/app
+      - ./editor_files:/app/editor_files
+    environment:
+      - ENV=production
+    restart: unless-stopped

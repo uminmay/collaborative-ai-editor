@@ -3,15 +3,22 @@ name: Deploy
 on:
   push:
     branches: [ master ]
+  workflow_run:
+    workflows: ["Test"]
+    branches: [master]
+    types:
+      - completed
 
 jobs:
   deploy:
+    # Only run if tests passed
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Deploy to GCP VM
+    - name: Deploy to Production GCP VM
       env:
         PRIVATE_KEY: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
         HOST: ${{ secrets.GCP_VM_HOST }}
@@ -22,14 +29,8 @@ jobs:
         mkdir -p ~/.ssh
         ssh-keyscan -H $HOST >> ~/.ssh/known_hosts
         
-        # Deploy to test environment
-        ssh -i private_key $USERNAME@$HOST "cd /opt/test/collaborative-ai-editor && \
-          git pull origin master && \
-          docker-compose down && \
-          docker-compose up -d --build"
-        
-        # Deploy to prod environment
+        # Deploy ONLY to prod environment
         ssh -i private_key $USERNAME@$HOST "cd /opt/prod/collaborative-ai-editor && \
           git pull origin master && \
-          docker-compose down && \
-          docker-compose up -d --build"
+          docker-compose -f docker-compose.prod.yml down && \
+          docker-compose -f docker-compose.prod.yml up -d --build"
