@@ -1,0 +1,16 @@
+MANIFEST.in
+README.md
+pyproject.toml
+requirements.txt
+setup.py
+app/__init__.py
+app/main.py
+app/static/css/style.css
+app/static/js/editor.js
+app/templates/editor.html
+collaborative_ai_editor.egg-info/PKG-INFO
+collaborative_ai_editor.egg-info/SOURCES.txt
+collaborative_ai_editor.egg-info/dependency_links.txt
+collaborative_ai_editor.egg-info/requires.txt
+collaborative_ai_editor.egg-info/top_level.txt
+tests/test_main.py
