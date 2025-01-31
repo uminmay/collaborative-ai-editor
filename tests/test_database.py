@@ -44,10 +44,19 @@ def test_get_project(test_db):
 def test_delete_project(test_db):
     project = models.Project(name="test_project", path="/test_project")
     test_db.add(project)
+    test_db.flush()
     test_db.commit()
     
-    test_db.delete(project)
-    test_db.commit()
+    # Get fresh instance
+    project_id = project.id
+    test_db.expunge_all()
     
-    saved_project = test_db.query(models.Project).filter_by(path="/test_project").first()
+    # Delete
+    project_to_delete = test_db.query(models.Project).get(project_id)
+    test_db.delete(project_to_delete)
+    test_db.commit()
+    test_db.expire_all()
+    
+    # Verify deletion
+    saved_project = test_db.query(models.Project).filter_by(id=project_id).first()
     assert saved_project is None
