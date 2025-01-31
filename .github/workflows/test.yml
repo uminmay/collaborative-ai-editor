@@ -44,3 +44,4 @@ jobs:
         body: 'All tests have passed. Ready to merge into master.'
         base: 'master'
         head: 'test'
+
