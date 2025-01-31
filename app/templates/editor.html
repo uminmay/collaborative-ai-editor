@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Code Editor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="toolbar">
+            <input type="text" id="filename" placeholder="filename.txt">
+            <button onclick="saveFile()">Save</button>
+            <button onclick="loadFile()">Load</button>
+        </div>
+        <textarea id="editor" spellcheck="false"></textarea>
+    </div>
+    <script src="/static/js/editor.js"></script>
+</body>
+</html>
+

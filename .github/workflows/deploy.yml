@@ -1,0 +1,35 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to GCP VM
+      env:
+        PRIVATE_KEY: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+        HOST: ${{ secrets.GCP_VM_HOST }}
+        USERNAME: ${{ secrets.GCP_VM_USERNAME }}
+      run: |
+        echo "$PRIVATE_KEY" > private_key
+        chmod 600 private_key
+        mkdir -p ~/.ssh
+        ssh-keyscan -H $HOST >> ~/.ssh/known_hosts
+        
+        # Deploy to test environment
+        ssh -i private_key $USERNAME@$HOST "cd /opt/test/collaborative-ai-editor && \
+          git pull origin master && \
+          docker-compose down && \
+          docker-compose up -d --build"
+        
+        # Deploy to prod environment
+        ssh -i private_key $USERNAME@$HOST "cd /opt/prod/collaborative-ai-editor && \
+          git pull origin master && \
+          docker-compose down && \
+          docker-compose up -d --build"
