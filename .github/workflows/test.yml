@@ -26,8 +26,10 @@ jobs:
         pip install -e .
     
     - name: Run tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}
       run: |
-        PYTHONPATH=$PYTHONPATH:$(pwd) pytest tests/
+        pytest tests/ -v
         
     - name: Create Pull Request to master
       if: success() && github.event_name == 'push' && github.ref == 'refs/heads/test'
