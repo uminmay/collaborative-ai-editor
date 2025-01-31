@@ -129,12 +129,20 @@ async def health_check():
 @app.get("/", response_class=HTMLResponse)
 async def get_home(request: Request):
     """Render home page with folder structure"""
-    return templates.TemplateResponse(request, "home.html", {"request": request})
+    return templates.TemplateResponse(
+        request=request,
+        name="home.html",
+        context={"request": request}
+    )
 
 @app.get("/editor", response_class=HTMLResponse)
 async def get_editor(request: Request):
     """Render editor page"""
-    return templates.TemplateResponse(request, "editor.html", {"request": request})
+    return templates.TemplateResponse(
+        request=request,
+        name="editor.html",
+        context={"request": request}
+    )
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

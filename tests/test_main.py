@@ -18,7 +18,7 @@ def test_get_home(test_client):
     """Test home page loads"""
     response = test_client.get("/")
     assert response.status_code == 200
-    assert "Project Explorer" in response.text
+    assert "Projects List" in response.text  # Updated to match the actual title
 
 def test_get_editor(test_client):
     """Test editor page loads"""
@@ -58,11 +58,10 @@ def test_delete_file(test_client):
     test_file = Path("editor_files/to_delete.txt")
     test_file.touch()
     
-    # For DELETE requests, we need to send data differently
-    response = test_client.delete(
+    response = test_client.request(
+        "DELETE",
         "/api/delete",
-        content=json.dumps({"path": "to_delete.txt"}),
-        headers={"Content-Type": "application/json"}
+        json={"path": "to_delete.txt"}
     )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
@@ -74,11 +73,10 @@ def test_delete_folder(test_client):
     test_folder = Path("editor_files/to_delete_folder")
     test_folder.mkdir(exist_ok=True)
     
-    # For DELETE requests, we need to send data differently
-    response = test_client.delete(
+    response = test_client.request(
+        "DELETE",
         "/api/delete",
-        content=json.dumps({"path": "to_delete_folder"}),
-        headers={"Content-Type": "application/json"}
+        json={"path": "to_delete_folder"}
     )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
