@@ -33,9 +33,10 @@ jobs:
       uses: peter-evans/create-pull-request@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        branch: master
+        commit-message: 'Automated PR from test to master'
+        branch: test-to-master
+        delete-branch: true
         title: 'Merge test into master'
         body: 'All tests have passed. Ready to merge into master.'
-        base: master
-
-
+        base: 'master'
+        head: 'test'
