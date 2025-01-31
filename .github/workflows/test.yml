@@ -2,9 +2,9 @@ name: Test
 
 on:
   push:
-    branches: [ test ]
+    branches: [ test, master ]
   pull_request:
-    branches: [ test ]
+    branches: [ test, master ]
 
 jobs:
   test:
@@ -30,12 +30,13 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       run: |
         pytest tests/ -v
-        
+
     - name: Create Pull Request to master
-      if: success() && github.event_name == 'push' && github.ref == 'refs/heads/test'
+      # Only create PR if we're on test branch and tests passed
+      if: success() && github.ref == 'refs/heads/test'
       uses: peter-evans/create-pull-request@v5
       with:
-        token: ${{ secrets.PAT_GITHUB }}  # Using PAT instead of GITHUB_TOKEN
+        token: ${{ secrets.PAT_GITHUB }}
         commit-message: 'Automated PR from test to master'
         branch: test-to-master
         delete-branch: true

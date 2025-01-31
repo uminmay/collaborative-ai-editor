@@ -3,9 +3,16 @@ name: Deploy
 on:
   push:
     branches: [ master ]
+  workflow_run:
+    workflows: ["Test"]
+    branches: [master]
+    types:
+      - completed
 
 jobs:
   deploy:
+    # Only run if tests passed
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     
     steps:
