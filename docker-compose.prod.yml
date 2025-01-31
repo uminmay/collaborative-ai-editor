@@ -11,7 +11,7 @@ services:
     environment:
       - ENV=production
       - MAX_WORKERS=4
-      - CORS_ORIGINS=https://yourdomain.com
+      - CORS_ORIGINS=*
       - LOG_LEVEL=INFO
     restart: unless-stopped
     healthcheck:
