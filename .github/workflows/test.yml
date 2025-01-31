@@ -27,7 +27,7 @@ jobs:
     
     - name: Run tests
       run: |
-        pytest
+        PYTHONPATH=$PYTHONPATH:$(pwd) pytest tests/
         
     - name: Create Pull Request to master
       if: success() && github.event_name == 'push' && github.ref == 'refs/heads/test'
@@ -41,4 +41,3 @@ jobs:
         body: 'All tests have passed. Ready to merge into master.'
         base: 'master'
         head: 'test'
-
