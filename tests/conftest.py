@@ -3,7 +3,7 @@ import sys
 import pytest
 
 # Add the parent directory to PYTHONPATH
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath('./app'))
 
 @pytest.fixture
 def test_app():
