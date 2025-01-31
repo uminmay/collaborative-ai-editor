@@ -1,19 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Simple Code Editor</title>
+    <title>Code Editor</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="container">
         <div class="toolbar">
-            <input type="text" id="filename" placeholder="filename.txt">
-            <button onclick="saveFile()">Save</button>
-            <button onclick="loadFile()">Load</button>
+            <div class="file-info">
+                <h3 id="filepath" class="text-lg font-semibold"></h3>
+                <span id="save-status" class="text-sm text-gray-500"></span>
+            </div>
+            <a href="/" class="back-button">Back to Projects</a>
         </div>
-        <textarea id="editor" spellcheck="false"></textarea>
+        <textarea id="editor" spellcheck="false" class="w-full h-screen"></textarea>
     </div>
     <script src="/static/js/editor.js"></script>
 </body>
 </html>
-
