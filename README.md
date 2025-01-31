@@ -47,5 +47,4 @@ Required GitHub Secrets:
 Run tests with:
 ```bash
 pytest
-```
- 
+``` 
