@@ -37,7 +37,6 @@ The application is automatically deployed to GCP VM using GitHub Actions:
 - Test environment: `/opt/test/collaborative-ai-editor`
 - Production environment: `/opt/prod/collaborative-ai-editor`
 
-
 Required GitHub Secrets:
 - `GCP_SSH_PRIVATE_KEY`: SSH private key for GCP VM
 - `GCP_VM_HOST`: GCP VM host address
