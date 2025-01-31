@@ -32,5 +32,5 @@ jobs:
         # Deploy ONLY to prod environment
         ssh -i private_key $USERNAME@$HOST "cd /opt/prod/collaborative-ai-editor && \
           git pull origin master && \
-          docker-compose -f docker-compose.prod.yml down && \
-          docker-compose -f docker-compose.prod.yml up -d --build"
+          sudo docker-compose -f docker-compose.prod.yml down && \
+          sudo docker-compose -f docker-compose.prod.yml up -d --build"
