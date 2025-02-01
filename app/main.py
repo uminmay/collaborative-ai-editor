@@ -1,6 +1,7 @@
-from fastapi import FastAPI, WebSocket, Request, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, Request, HTTPException, Depends, status, Form
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from starlette.websockets import WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -8,13 +9,18 @@ import os
 import json
 from pathlib import Path
 import shutil
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, Annotated
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from logging.config import dictConfig
 from sqlalchemy.orm import Session
-from app.db import models, crud, database
+from app.db import models, crud, database, schemas
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
+import uuid
+from starlette.middleware.sessions import SessionMiddleware
 
+# Logging configuration
 logging_config = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -44,7 +50,12 @@ logging_config = {
 dictConfig(logging_config)
 logger = logging.getLogger(__name__)
 
+# FastAPI app initialization
 app = FastAPI(title="Collaborative AI Editor")
+
+# Session middleware with a secure random key
+SESSION_SECRET = str(uuid.uuid4())
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
 # Database setup
 models.Base.metadata.create_all(bind=database.engine)
@@ -58,24 +69,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Enhanced exception handlers
-@app.exception_handler(Exception)
-async def generic_exception_handler(request, exc):
-    logger.error(f"Error handling request: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"message": str(exc), "detail": str(exc.__class__.__name__)},
-    )
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc: HTTPException):
-    logger.error(f"HTTP error {exc.status_code}: {exc.detail}")
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"message": exc.detail},
-    )
-
-# Static files and templates
+# Static files and templates setup
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
@@ -83,7 +77,15 @@ templates = Jinja2Templates(directory="app/templates")
 PROJECTS_DIR = Path("editor_files")
 PROJECTS_DIR.mkdir(exist_ok=True)
 
-# Pydantic models
+# JWT settings
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-for-jwt")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# OAuth2 setup
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
+
+# Pydantic models for request validation
 class CreateItem(BaseModel):
     name: str
     type: str
@@ -92,13 +94,40 @@ class CreateItem(BaseModel):
 class DeleteItem(BaseModel):
     path: str
 
-# Database dependency
-def get_db():
-    db = database.SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Authentication functions
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(
+    request: Request,
+    db: Session = Depends(database.get_db)
+) -> Optional[models.User]:
+    # First check session
+    session = request.session
+    username = session.get("user")
+    if username:
+        return crud.get_user_by_username(db, username)
+    
+    # Then check bearer token
+    auth = request.headers.get("Authorization")
+    if auth and auth.startswith("Bearer "):
+        token = auth.split(" ")[1]
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            username = payload.get("sub")
+            if username:
+                return crud.get_user_by_username(db, username)
+        except JWTError:
+            return None
+    
+    return None
 
 # Utility functions
 def get_directory_structure(path: Path) -> Dict[str, Union[Dict, str]]:
@@ -124,10 +153,112 @@ def validate_path(path: str) -> bool:
     except (ValueError, RuntimeError):
         return False
 
+# Authentication routes
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/login")
+async def login(
+    request: Request,
+    db: Session = Depends(database.get_db),
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    logger.info(f"Login attempt for username: {username}")
+    user = crud.authenticate_user(db, username, password)
+    if not user:
+        logger.warning(f"Failed login attempt for username: {username}")
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Invalid username or password"}
+        )
+    
+    logger.info(f"Successful login for username: {username}")
+    # Create session
+    request.session["user"] = user.username
+    
+    # Create access token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    
+    response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    response.set_cookie(
+        key="access_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        samesite='lax',
+        max_age=1800
+    )
+    return response
+
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    response = RedirectResponse(url="/login")
+    response.delete_cookie("access_token")
+    return response
+
+# Initialize admin user on startup
+@app.on_event("startup")
+async def startup_event():
+    try:
+        # Ensure database tables are created
+        models.Base.metadata.create_all(bind=database.engine)
+        
+        # Create admin user
+        db = next(database.get_db())
+        admin = crud.get_user_by_username(db, "admin")
+        if not admin:
+            logger.info("Creating admin user...")
+            crud.create_user(
+                db,
+                schemas.UserCreate(username="admin", password="admin")
+            )
+            logger.info("Admin user created successfully")
+        else:
+            logger.info("Admin user already exists")
+    except Exception as e:
+        logger.error(f"Error in startup: {e}", exc_info=True)
+
+# Main application routes
+@app.get("/", response_class=HTMLResponse)
+async def get_home(
+    request: Request,
+    user: Optional[models.User] = Depends(get_current_user)
+):
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    return templates.TemplateResponse(
+        request=request,
+        name="home.html",
+        context={"request": request}
+    )
+
+@app.get("/editor", response_class=HTMLResponse)
+async def get_editor(
+    request: Request,
+    user: Optional[models.User] = Depends(get_current_user)
+):
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    return templates.TemplateResponse(
+        request=request,
+        name="editor.html",
+        context={"request": request}
+    )
+
 # API endpoints
 @app.get("/api/structure")
-async def get_structure():
+async def get_structure(user: Optional[models.User] = Depends(get_current_user)):
     """Get the entire project structure"""
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
     try:
         return get_directory_structure(PROJECTS_DIR)
     except Exception as e:
@@ -135,8 +266,15 @@ async def get_structure():
         raise HTTPException(status_code=500, detail="Failed to get directory structure")
 
 @app.post("/api/create")
-async def create_item(item: CreateItem, db: Session = Depends(get_db)):
+async def create_item(
+    item: CreateItem,
+    db: Session = Depends(database.get_db),
+    user: Optional[models.User] = Depends(get_current_user)
+):
     """Create a new file or folder"""
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
     try:
         if not validate_path(item.path):
             raise HTTPException(status_code=400, detail="Invalid path")
@@ -161,8 +299,15 @@ async def create_item(item: CreateItem, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.delete("/api/delete")
-async def delete_item(item: DeleteItem, db: Session = Depends(get_db)):
+async def delete_item(
+    item: DeleteItem,
+    db: Session = Depends(database.get_db),
+    user: Optional[models.User] = Depends(get_current_user)
+):
     """Delete a file or folder"""
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
     try:
         if not item.path:
             raise HTTPException(status_code=400, detail="Path cannot be empty")
@@ -189,8 +334,16 @@ async def delete_item(item: DeleteItem, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/projects")
-def read_projects(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_projects(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(database.get_db),
+    user: Optional[models.User] = Depends(get_current_user)
+):
     """Get all projects"""
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
     try:
         return crud.get_projects(db, skip=skip, limit=limit)
     except Exception as e:
@@ -202,42 +355,34 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
 
-# Page routes
-@app.get("/", response_class=HTMLResponse)
-async def get_home(request: Request):
-    """Render home page with folder structure"""
-    return templates.TemplateResponse(
-        request=request,
-        name="home.html",
-        context={"request": request}
-    )
-
-@app.get("/editor", response_class=HTMLResponse)
-async def get_editor(request: Request):
-    """Render editor page"""
-    return templates.TemplateResponse(
-        request=request,
-        name="editor.html",
-        context={"request": request}
-    )
-
-@app.get("/api/db/projects")
-def view_all_projects(db: Session = Depends(get_db)):
-    """View all projects in database"""
-    projects = crud.get_projects(db)
-    return [{
-        "id": project.id,
-        "project_id": project.project_id,
-        "name": project.name,
-        "path": project.path,
-        "created_at": project.created_at,
-        "updated_at": project.updated_at
-    } for project in projects]
+# WebSocket auth
+async def get_websocket_user(
+    websocket: WebSocket,
+    db: Session = Depends(database.get_db)
+) -> Optional[models.User]:
+    session = websocket.session
+    if not session:
+        return None
+    
+    username = session.get("user")
+    if not username:
+        return None
+        
+    return crud.get_user_by_username(db, username)
 
 # WebSocket endpoint
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    db: Session = Depends(database.get_db)
+):
+    user = await get_websocket_user(websocket, db)
+    if not user:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+        
     await websocket.accept()
+    
     try:
         while True:
             data = await websocket.receive_text()
@@ -289,3 +434,24 @@ async def websocket_endpoint(websocket: WebSocket):
             })
         except Exception:
             pass
+
+# Exception handlers
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Error handling request: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"message": str(exc), "detail": str(exc.__class__.__name__)},
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    logger.error(f"HTTP error {exc.status_code}: {exc.detail}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"message": exc.detail},
+    )
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
