@@ -3,7 +3,7 @@ from fastapi import status
 import json
 import os
 from .conftest import (
-    test_db,
+    test_database,
     test_client,
     authenticated_client,
     test_project,
