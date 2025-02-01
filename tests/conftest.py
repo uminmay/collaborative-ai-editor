@@ -1,26 +1,27 @@
 import pytest
-import os
-import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 from app.db.models import Base
-from app.main import app
-from fastapi.security import OAuth2PasswordBearer
+from app.main import app, get_current_user
 from datetime import datetime, timedelta
-import jwt  # PyJWT import
+import jwt
+from app.db import crud, models
+from typing import Generator
 
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
 SECRET_KEY = "test_secret_key"
 ALGORITHM = "HS256"
 
-def create_test_token():
-    """Create a test JWT token"""
-    access_token_expires = timedelta(minutes=30)
-    expire = datetime.utcnow() + access_token_expires
-    to_encode = {"exp": expire, "sub": "testuser"}
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+# Override the get_current_user dependency for testing
+async def override_get_current_user():
+    """Override get_current_user for testing"""
+    return models.User(
+        id=1,
+        username="testuser",
+        password_hash="",
+        is_admin=True
+    )
 
 @pytest.fixture(scope="session")
 def test_engine():
@@ -29,11 +30,9 @@ def test_engine():
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
-    if os.path.exists("./test.db"):
-        os.remove("./test.db")
 
 @pytest.fixture(scope="function")
-def test_db(test_engine):
+def test_db(test_engine) -> Generator:
     """Create test database session"""
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
     db = TestingSessionLocal()
@@ -44,22 +43,39 @@ def test_db(test_engine):
         db.close()
 
 @pytest.fixture
-def test_client():
+def test_client(test_db):
     """Create test client"""
-    return TestClient(app)
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    client = TestClient(app)
+    return client
 
 @pytest.fixture
-def authenticated_client(test_client):
+def authenticated_client(test_client, test_db):
     """Create authenticated test client"""
-    token = create_test_token()
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    # Create a new client with the authentication headers
-    client = TestClient(app)
-    client.headers.update(headers)
-    return client
+    # Create test user in database
+    test_user = crud.create_user(
+        test_db,
+        models.User(
+            username="testuser",
+            password_hash=models.User.hash_password("testpass"),
+            is_admin=True
+        )
+    )
+    
+    # Create access token
+    access_token_expires = timedelta(minutes=30)
+    access_token = jwt.encode(
+        {
+            "sub": test_user.username,
+            "exp": datetime.utcnow() + access_token_expires
+        },
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+    
+    # Set auth header
+    test_client.headers["Authorization"] = f"Bearer {access_token}"
+    return test_client
 
 @pytest.fixture
 def test_project(authenticated_client):
