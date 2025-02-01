@@ -6,7 +6,7 @@ from app.db.models import Base
 from app.main import app, get_current_user
 from datetime import datetime, timedelta
 import jwt
-from app.db import crud, models
+from app.db import crud, models, schemas
 from typing import Generator
 
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
@@ -52,15 +52,12 @@ def test_client(test_db):
 @pytest.fixture
 def authenticated_client(test_client, test_db):
     """Create authenticated test client"""
-    # Create test user in database
-    test_user = crud.create_user(
-        test_db,
-        models.User(
-            username="testuser",
-            password_hash=models.User.hash_password("testpass"),
-            is_admin=True
-        )
+    # Create test user in database using the proper schema
+    user_create = schemas.UserCreate(
+        username="testuser",
+        password="testpass"
     )
+    test_user = crud.create_user(test_db, user_create)
     
     # Create access token
     access_token_expires = timedelta(minutes=30)
@@ -75,6 +72,9 @@ def authenticated_client(test_client, test_db):
     
     # Set auth header
     test_client.headers["Authorization"] = f"Bearer {access_token}"
+    
+    # Set session data
+    test_client.cookies.set("session", "test-session")
     return test_client
 
 @pytest.fixture
