@@ -43,7 +43,8 @@ def test_delete_file(authenticated_client, test_file):
     """Test file deletion"""
     response = authenticated_client.delete(
         "/api/delete",
-        json={"path": test_file}
+        headers={"Content-Type": "application/json"},
+        content=json.dumps({"path": test_file})
     )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
@@ -58,7 +59,8 @@ def test_delete_project(authenticated_client, test_project):
     """Test project deletion"""
     response = authenticated_client.delete(
         "/api/delete",
-        json={"path": test_project}
+        headers={"Content-Type": "application/json"},
+        content=json.dumps({"path": test_project})
     )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
@@ -121,6 +123,7 @@ def test_path_validation(authenticated_client):
         # Test delete
         response = authenticated_client.delete(
             "/api/delete",
-            json={"path": path}
+            headers={"Content-Type": "application/json"},
+            content=json.dumps({"path": path})
         )
         assert response.status_code == 400
