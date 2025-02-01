@@ -6,8 +6,21 @@ from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 from app.db.models import Base
 from app.main import app
+from fastapi.security import OAuth2PasswordBearer
+from datetime import datetime, timedelta
+import jwt
 
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
+SECRET_KEY = "test_secret_key"
+ALGORITHM = "HS256"
+
+def create_test_token():
+    """Create a test JWT token"""
+    access_token_expires = timedelta(minutes=30)
+    expire = datetime.utcnow() + access_token_expires
+    to_encode = {"exp": expire, "sub": "testuser"}
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 @pytest.fixture(scope="session")
 def test_engine():
@@ -38,7 +51,11 @@ def test_client():
 @pytest.fixture
 def authenticated_client(test_client):
     """Create authenticated test client"""
-    # For now, we'll just return the regular client since auth isn't implemented yet
+    token = create_test_token()
+    test_client.headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
     return test_client
 
 @pytest.fixture
@@ -71,5 +88,4 @@ def test_file(authenticated_client, test_project):
 
 def setup_test_environment():
     """Setup test environment"""
-    # Create test directory
     os.makedirs("editor_files", exist_ok=True)
