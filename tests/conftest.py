@@ -8,7 +8,7 @@ from app.db.models import Base
 from app.main import app
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta
-import jwt
+import jwt  # PyJWT import
 
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
 SECRET_KEY = "test_secret_key"
@@ -52,11 +52,14 @@ def test_client():
 def authenticated_client(test_client):
     """Create authenticated test client"""
     token = create_test_token()
-    test_client.headers = {
+    headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    return test_client
+    # Create a new client with the authentication headers
+    client = TestClient(app)
+    client.headers.update(headers)
+    return client
 
 @pytest.fixture
 def test_project(authenticated_client):
@@ -85,7 +88,3 @@ def test_file(authenticated_client, test_project):
     )
     assert response.status_code == 200
     return f"{test_project}/test_file.txt"
-
-def setup_test_environment():
-    """Setup test environment"""
-    os.makedirs("editor_files", exist_ok=True)
