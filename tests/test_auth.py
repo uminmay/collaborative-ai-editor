@@ -1,12 +1,20 @@
 import pytest
 from app.db import crud, schemas
 from fastapi import status
+import uuid
+
+def test_login_page(test_client):
+    """Test login page access"""
+    response = test_client.get("/login")
+    assert response.status_code == 200
+    assert "Login" in response.text
 
 def test_login(test_client, test_db):
     """Test user login functionality"""
-    # Create a test user
+    # Create a test user with unique username
+    username = f"testlogin_{uuid.uuid4().hex[:8]}"
     user_create = schemas.UserCreate(
-        username="testlogin",
+        username=username,
         password="testpass"
     )
     crud.create_user(test_db, user_create)
@@ -15,18 +23,20 @@ def test_login(test_client, test_db):
     response = test_client.post(
         "/login",
         data={
-            "username": "testlogin",
+            "username": username,
             "password": "testpass"
-        }
+        },
+        allow_redirects=False
     )
     assert response.status_code == 302
     assert response.headers["location"] == "/"
+    assert "access_token" in response.cookies
     
     # Test failed login
     response = test_client.post(
         "/login",
         data={
-            "username": "testlogin",
+            "username": username,
             "password": "wrongpass"
         }
     )
@@ -35,61 +45,72 @@ def test_login(test_client, test_db):
 
 def test_logout(test_client):
     """Test user logout functionality"""
-    response = test_client.get("/logout")
+    response = test_client.get("/logout", allow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "/login"
     
-    # Verify access token cookie is cleared
-    assert "access_token" not in response.cookies
+    # Check cookies
+    cookies = response.headers.get("set-cookie", "")
+    assert "access_token=;" in cookies  # Cookie cleared
 
 def test_session_authentication(test_client, test_db):
     """Test session-based authentication"""
-    # Create and login user
+    # Create unique test user
+    username = f"testsession_{uuid.uuid4().hex[:8]}"
     user_create = schemas.UserCreate(
-        username="testsession",
+        username=username,
         password="testpass"
     )
     crud.create_user(test_db, user_create)
     
-    login_response = test_client.post(
+    # Login
+    response = test_client.post(
         "/login",
         data={
-            "username": "testsession",
+            "username": username,
             "password": "testpass"
-        }
+        },
+        allow_redirects=False
     )
-    assert login_response.status_code == 302
+    assert response.status_code == 302
     
-    # Access protected endpoint
-    response = test_client.get("/api/structure")
+    # Get cookies from response
+    cookies = response.cookies
+    
+    # Try accessing protected endpoint
+    response = test_client.get(
+        "/api/structure",
+        cookies=cookies
+    )
     assert response.status_code == 200
 
 def test_token_authentication(test_client, test_db):
     """Test token-based authentication"""
-    # Create and login user
+    # Create unique test user
+    username = f"testtoken_{uuid.uuid4().hex[:8]}"
     user_create = schemas.UserCreate(
-        username="testtoken",
+        username=username,
         password="testpass"
     )
     crud.create_user(test_db, user_create)
     
-    login_response = test_client.post(
+    # Login to get token
+    response = test_client.post(
         "/login",
         data={
-            "username": "testtoken",
+            "username": username,
             "password": "testpass"
-        }
+        },
+        allow_redirects=False
     )
-    assert login_response.status_code == 302
+    assert response.status_code == 302
     
     # Extract token from cookie
-    cookies = login_response.cookies
-    assert "access_token" in cookies
-    token = cookies["access_token"]
+    token = response.cookies["access_token"]
     
     # Use token to access protected endpoint
     response = test_client.get(
         "/api/structure",
-        headers={"Authorization": token}
+        headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
