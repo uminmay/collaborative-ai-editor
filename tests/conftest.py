@@ -4,25 +4,41 @@ import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
-from app.db import models, crud, schemas
+from typing import Generator
 from app.main import app
+from app.db import models, crud, schemas, database
 
+# Add app directory to Python path
 sys.path.append(os.path.abspath('./app'))
 
+# Test database URL
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
+
+# Create test database engine
+engine = create_engine(
+    SQLALCHEMY_TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False}
+)
+
+# Create test SessionLocal class
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def override_get_db() -> Generator:
+    """Override the database dependency"""
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
 
 @pytest.fixture(scope="function")
 def test_db():
     """Create a fresh database for each test"""
-    engine = create_engine(SQLALCHEMY_TEST_DATABASE_URL)
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
-    # Create database tables
+    # Create tables
     models.Base.metadata.create_all(bind=engine)
     
-    # Create test database session
+    # Get test database session
     db = TestingSessionLocal()
-    
     try:
         yield db
     finally:
@@ -35,28 +51,21 @@ def test_db():
 @pytest.fixture(scope="function")
 def test_client(test_db):
     """Create a test client with a fresh database"""
-    def override_get_db():
-        try:
-            yield test_db
-        finally:
-            test_db.close()
-            
-    # Create test admin user
-    admin_user = crud.create_user(
-        test_db,
-        schemas.UserCreate(username="admin", password="admin")
-    )
-    
-    # Override the database dependency
-    app.dependency_overrides = {
-        "get_db": override_get_db
-    }
-    
-    with TestClient(app) as client:
-        yield client
-    
-    # Clean up
-    app.dependency_overrides = {}
+    try:
+        # Override the database dependency
+        app.dependency_overrides[database.get_db] = lambda: test_db
+        
+        # Create test admin user
+        admin_user = crud.create_user(
+            test_db,
+            schemas.UserCreate(username="admin", password="admin")
+        )
+        
+        with TestClient(app) as client:
+            yield client
+    finally:
+        # Clean up
+        app.dependency_overrides.clear()
 
 @pytest.fixture(scope="function")
 def authenticated_client(test_client):
@@ -64,7 +73,7 @@ def authenticated_client(test_client):
     response = test_client.post(
         "/login",
         data={"username": "admin", "password": "admin"},
-        allow_redirects=False
+        follow_redirects=False
     )
     assert response.status_code == 302
     return test_client
@@ -96,3 +105,16 @@ def test_file(authenticated_client, test_project):
     )
     assert response.status_code == 200
     return f"{test_project}/test_file.txt"
+
+@pytest.fixture(autouse=True)
+def setup_test_environment():
+    """Setup test environment before each test"""
+    # Create editor_files directory if it doesn't exist
+    os.makedirs("editor_files", exist_ok=True)
+    
+    yield
+    
+    # Cleanup after test
+    if os.path.exists("editor_files"):
+        import shutil
+        shutil.rmtree("editor_files")

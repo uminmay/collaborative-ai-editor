@@ -292,8 +292,8 @@ async def create_item(
         else:
             new_path.touch()
         return {"status": "success"}
-    except HTTPException as he:
-        raise he
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Create item error: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
@@ -335,6 +335,12 @@ async def delete_item(
         else:
             full_path.unlink()
         return {"status": "success"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete item error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.get("/api/projects")
 def read_projects(
