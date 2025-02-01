@@ -312,11 +312,19 @@ async def delete_item(
         if not item.path:
             raise HTTPException(status_code=400, detail="Path cannot be empty")
             
+        # Validate path before checking existence
         if not validate_path(item.path):
             raise HTTPException(status_code=400, detail="Invalid path")
-            
+
+        # Check if path points outside project directory
         full_path = PROJECTS_DIR / item.path.lstrip('/')
-        
+        try:
+            if not full_path.resolve().is_relative_to(PROJECTS_DIR.resolve()):
+                raise HTTPException(status_code=400, detail="Invalid path")
+        except (ValueError, RuntimeError):
+            raise HTTPException(status_code=400, detail="Invalid path")
+            
+        # Only check existence after path validation
         if not full_path.exists():
             raise HTTPException(status_code=404, detail="Path not found")
             
@@ -327,11 +335,6 @@ async def delete_item(
         else:
             full_path.unlink()
         return {"status": "success"}
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        logger.error(f"Delete item error: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/projects")
 def read_projects(
