@@ -2,6 +2,16 @@ import pytest
 from fastapi import status
 import json
 import os
+from .conftest import (
+    test_db,
+    test_client,
+    authenticated_client,
+    test_project,
+    test_file,
+    setup_test_environment
+)
+
+pytestmark = pytest.mark.asyncio
 
 def test_create_project(authenticated_client):
     """Test project creation"""
@@ -108,8 +118,19 @@ def test_path_validation(authenticated_client):
         "//double/slash"
     ]
     
+    # First create a valid directory to test against
+    response = authenticated_client.post(
+        "/api/create",
+        json={
+            "name": "test_dir",
+            "type": "folder",
+            "path": "/"
+        }
+    )
+    assert response.status_code == 200
+    
     for path in invalid_paths:
-        # Test create
+        # Test create with invalid path
         response = authenticated_client.post(
             "/api/create",
             json={
@@ -118,12 +139,20 @@ def test_path_validation(authenticated_client):
                 "path": path
             }
         )
-        assert response.status_code == 400
+        assert response.status_code == 400, f"Create with invalid path {path} should return 400"
         
-        # Test delete
+        # Test delete with invalid path
         response = authenticated_client.request(
             "DELETE",
             "/api/delete",
             json={"path": path}
         )
-        assert response.status_code == 400
+        assert response.status_code == 400, f"Delete with invalid path {path} should return 400"
+        
+    # Clean up
+    response = authenticated_client.request(
+        "DELETE",
+        "/api/delete",
+        json={"path": "test_dir"}
+    )
+    assert response.status_code == 200
