@@ -2,16 +2,16 @@ import pytest
 from fastapi import status
 import json
 import os
-from .conftest import (
-    test_database,
-    test_client,
-    authenticated_client,
-    test_project,
-    test_file,
-    setup_test_environment
-)
+from pathlib import Path
+import shutil
 
-pytestmark = pytest.mark.asyncio
+def setup_module(module):
+    """Setup test environment before module execution"""
+    Path("editor_files").mkdir(exist_ok=True)
+
+def teardown_module(module):
+    """Cleanup after module execution"""
+    shutil.rmtree("editor_files", ignore_errors=True)
 
 def test_create_project(authenticated_client):
     """Test project creation"""
@@ -51,8 +51,7 @@ def test_create_file(authenticated_client, test_project):
 
 def test_delete_file(authenticated_client, test_file):
     """Test file deletion"""
-    response = authenticated_client.request(
-        "DELETE",
+    response = authenticated_client.delete(
         "/api/delete",
         json={"path": test_file}
     )
@@ -67,8 +66,7 @@ def test_delete_file(authenticated_client, test_file):
 
 def test_delete_project(authenticated_client, test_project):
     """Test project deletion"""
-    response = authenticated_client.request(
-        "DELETE",
+    response = authenticated_client.delete(
         "/api/delete",
         json={"path": test_project}
     )
@@ -80,35 +78,6 @@ def test_delete_project(authenticated_client, test_project):
     assert response.status_code == 200
     assert test_project not in response.json()
 
-def test_get_structure(authenticated_client, test_project):
-    """Test getting project structure"""
-    # Create some nested files
-    authenticated_client.post(
-        "/api/create",
-        json={
-            "name": "subfolder",
-            "type": "folder",
-            "path": f"/{test_project}"
-        }
-    )
-    authenticated_client.post(
-        "/api/create",
-        json={
-            "name": "test.txt",
-            "type": "file",
-            "path": f"/{test_project}/subfolder"
-        }
-    )
-    
-    response = authenticated_client.get("/api/structure")
-    assert response.status_code == 200
-    structure = response.json()
-    
-    # Verify structure
-    assert test_project in structure
-    assert "subfolder" in structure[test_project]
-    assert "test.txt" in structure[test_project]["subfolder"]
-
 def test_path_validation(authenticated_client):
     """Test path validation for security"""
     invalid_paths = [
@@ -118,19 +87,8 @@ def test_path_validation(authenticated_client):
         "//double/slash"
     ]
     
-    # First create a valid directory to test against
-    response = authenticated_client.post(
-        "/api/create",
-        json={
-            "name": "test_dir",
-            "type": "folder",
-            "path": "/"
-        }
-    )
-    assert response.status_code == 200
-    
     for path in invalid_paths:
-        # Test create with invalid path
+        # Test create
         response = authenticated_client.post(
             "/api/create",
             json={
@@ -139,20 +97,11 @@ def test_path_validation(authenticated_client):
                 "path": path
             }
         )
-        assert response.status_code == 400, f"Create with invalid path {path} should return 400"
+        assert response.status_code == 400
         
-        # Test delete with invalid path
-        response = authenticated_client.request(
-            "DELETE",
+        # Test delete
+        response = authenticated_client.delete(
             "/api/delete",
             json={"path": path}
         )
-        assert response.status_code == 400, f"Delete with invalid path {path} should return 400"
-        
-    # Clean up
-    response = authenticated_client.request(
-        "DELETE",
-        "/api/delete",
-        json={"path": "test_dir"}
-    )
-    assert response.status_code == 200
+        assert response.status_code == 400

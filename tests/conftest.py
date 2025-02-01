@@ -1,129 +1,75 @@
 import pytest
-from fastapi import status
-import json
 import os
+import sys
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from fastapi.testclient import TestClient
+from app.db.models import Base
+from app.main import app
 
-def test_create_project(authenticated_client):
-    """Test project creation"""
+SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
+
+@pytest.fixture(scope="session")
+def test_engine():
+    """Create test database engine"""
+    engine = create_engine(SQLALCHEMY_TEST_DATABASE_URL)
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    Base.metadata.drop_all(bind=engine)
+    if os.path.exists("./test.db"):
+        os.remove("./test.db")
+
+@pytest.fixture(scope="function")
+def test_db(test_engine):
+    """Create test database session"""
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.rollback()
+        db.close()
+
+@pytest.fixture
+def test_client():
+    """Create test client"""
+    return TestClient(app)
+
+@pytest.fixture
+def authenticated_client(test_client):
+    """Create authenticated test client"""
+    # For now, we'll just return the regular client since auth isn't implemented yet
+    return test_client
+
+@pytest.fixture
+def test_project(authenticated_client):
+    """Create a test project"""
     response = authenticated_client.post(
         "/api/create",
         json={
-            "name": "new_project",
+            "name": "test_project",
             "type": "folder",
             "path": "/"
         }
     )
     assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    
-    # Verify project exists in structure
-    response = authenticated_client.get("/api/structure")
-    assert response.status_code == 200
-    assert "new_project" in response.json()
+    return "test_project"
 
-def test_create_file(authenticated_client, test_project):
-    """Test file creation within a project"""
+@pytest.fixture
+def test_file(authenticated_client, test_project):
+    """Create a test file"""
     response = authenticated_client.post(
         "/api/create",
         json={
-            "name": "test.txt",
+            "name": "test_file.txt",
             "type": "file",
             "path": f"/{test_project}"
         }
     )
     assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    
-    # Verify file exists in structure
-    response = authenticated_client.get("/api/structure")
-    assert response.status_code == 200
-    assert "test.txt" in response.json()[test_project]
+    return f"{test_project}/test_file.txt"
 
-def test_delete_file(authenticated_client, test_file):
-    """Test file deletion"""
-    response = authenticated_client.request(
-        "DELETE",
-        "/api/delete",
-        json={"path": test_file}
-    )
-    assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    
-    # Verify file is gone from structure
-    response = authenticated_client.get("/api/structure")
-    project_name = test_file.split("/")[0]
-    assert response.status_code == 200
-    assert "test_file.txt" not in response.json()[project_name]
-
-def test_delete_project(authenticated_client, test_project):
-    """Test project deletion"""
-    response = authenticated_client.request(
-        "DELETE",
-        "/api/delete",
-        json={"path": test_project}
-    )
-    assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    
-    # Verify project is gone from structure
-    response = authenticated_client.get("/api/structure")
-    assert response.status_code == 200
-    assert test_project not in response.json()
-
-def test_get_structure(authenticated_client, test_project):
-    """Test getting project structure"""
-    # Create some nested files
-    authenticated_client.post(
-        "/api/create",
-        json={
-            "name": "subfolder",
-            "type": "folder",
-            "path": f"/{test_project}"
-        }
-    )
-    authenticated_client.post(
-        "/api/create",
-        json={
-            "name": "test.txt",
-            "type": "file",
-            "path": f"/{test_project}/subfolder"
-        }
-    )
-    
-    response = authenticated_client.get("/api/structure")
-    assert response.status_code == 200
-    structure = response.json()
-    
-    # Verify structure
-    assert test_project in structure
-    assert "subfolder" in structure[test_project]
-    assert "test.txt" in structure[test_project]["subfolder"]
-
-def test_path_validation(authenticated_client):
-    """Test path validation for security"""
-    invalid_paths = [
-        "../outside",
-        "/../../etc/passwd",
-        "\\windows\\path",
-        "//double/slash"
-    ]
-    
-    for path in invalid_paths:
-        # Test create
-        response = authenticated_client.post(
-            "/api/create",
-            json={
-                "name": "test.txt",
-                "type": "file",
-                "path": path
-            }
-        )
-        assert response.status_code == 400
-        
-        # Test delete
-        response = authenticated_client.request(
-            "DELETE",
-            "/api/delete",
-            json={"path": path}
-        )
-        assert response.status_code == 400
+def setup_test_environment():
+    """Setup test environment"""
+    # Create test directory
+    os.makedirs("editor_files", exist_ok=True)
