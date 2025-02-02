@@ -173,17 +173,24 @@ async def delete_item(
     try:
         if not item.path:
             raise HTTPException(status_code=400, detail="Path cannot be empty")
-            
-        if not validate_path(item.path):
+        
+        # First validate the path before checking existence
+        path = item.path.replace('\\', '/')  # Normalize path
+        if not validate_path(path):
             raise HTTPException(status_code=400, detail="Invalid path")
-
-        full_path = PROJECTS_DIR / item.path.replace('\\', '/').lstrip('/')
+            
+        # Only check existence after validation
+        full_path = PROJECTS_DIR / path.lstrip('/')
+        if '//' in path or '..' in path:
+            raise HTTPException(status_code=400, detail="Invalid path")
             
         if not full_path.exists():
             raise HTTPException(status_code=404, detail="Path not found")
             
         if full_path.is_dir():
             shutil.rmtree(full_path)
+            if '/' not in item.path:
+                crud.delete_project(db, path=str(full_path))
         else:
             full_path.unlink()
         return {"status": "success"}
