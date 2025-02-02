@@ -1,52 +1,35 @@
 import pytest
-import uuid
-from app.db import crud, schemas
-from pathlib import Path
+from fastapi.testclient import TestClient
+from app.main import app
+import shutil
 import os
+from pathlib import Path
 
-@pytest.fixture
-def websocket_client(editor_client, test_db):
-    """Create an authenticated WebSocket client"""
-    # Create and login a user
-    username = f"wsuser_{uuid.uuid4().hex[:8]}"
-    password = "testpass"
-    user_create = schemas.UserCreate(
-        username=username,
-        password=password
-    )
-    user = crud.create_user(test_db, user_create)
-    assert user is not None
-    
-    # Get authentication tokens
-    response = editor_client.post(
-        "/login",
-        data={"username": username, "password": password},
-        follow_redirects=False
-    )
-    assert response.status_code == 302
-    return editor_client, response.cookies
-
-def test_websocket_connection(websocket_client):
+def test_websocket_connection(editor_client):
     """Test WebSocket connection and basic operations"""
     if not os.path.exists("editor_files"):
         Path("editor_files").mkdir(exist_ok=True)
-
-    client, cookies = websocket_client
     
-    with client.websocket_connect("/ws", cookies=cookies) as websocket:
+    # Set the session cookie
+    editor_client.cookies.set("session", "test-session")
+    
+    with editor_client.websocket_connect("/ws") as websocket:
+        # Test sending a message
         websocket.send_json({
             "type": "load",
             "path": "test.txt"
         })
+        
+        # Test receiving a message
         response = websocket.receive_json()
         assert response["type"] == "error"
         assert "File not found" in response["message"]
 
-def test_websocket_file_operations(websocket_client, test_file):
+def test_websocket_file_operations(editor_client, test_file):
     """Test file operations through WebSocket"""
-    client, cookies = websocket_client
+    editor_client.cookies.set("session", "test-session")
     
-    with client.websocket_connect("/ws", cookies=cookies) as websocket:
+    with editor_client.websocket_connect("/ws") as websocket:
         # Test saving a file
         websocket.send_json({
             "type": "save",
@@ -66,11 +49,11 @@ def test_websocket_file_operations(websocket_client, test_file):
         assert response["type"] == "load"
         assert response["content"] == "test content"
 
-def test_websocket_invalid_path(websocket_client):
+def test_websocket_invalid_path(editor_client):
     """Test WebSocket security for invalid paths"""
-    client, cookies = websocket_client
+    editor_client.cookies.set("session", "test-session")
     
-    with client.websocket_connect("/ws", cookies=cookies) as websocket:
+    with editor_client.websocket_connect("/ws") as websocket:
         invalid_paths = ["../outside", "/../../etc/passwd"]
         
         for path in invalid_paths:
@@ -81,3 +64,10 @@ def test_websocket_invalid_path(websocket_client):
             response = websocket.receive_json()
             assert response["type"] == "error"
             assert "Invalid path" in response["message"]
+
+def test_websocket_auth(test_client):
+    """Test WebSocket authentication"""
+    # Try connecting without authentication
+    with pytest.raises(Exception):
+        with test_client.websocket_connect("/ws") as websocket:
+            pass
