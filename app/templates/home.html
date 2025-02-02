@@ -42,62 +42,8 @@
                                 </th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            {% for project in projects %}
-                            <tr>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <a href="#" onclick="openProject('{{ project.path }}')" 
-                                       class="text-blue-600 hover:text-blue-900">
-                                        {{ project.name }}
-                                    </a>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {{ project.owner.username }}
-                                    {% if project.owner_id == user.id %}
-                                        <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                            You
-                                        </span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-6 py-4">
-                                    <div class="flex items-center space-x-2">
-                                        <div class="flex -space-x-1">
-                                            {% for collaborator in project.collaborators %}
-                                            <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-gray-500 text-white text-sm font-medium" 
-                                                  title="{{ collaborator.username }}">
-                                                {{ collaborator.username[:2].upper() }}
-                                            </span>
-                                            {% endfor %}
-                                        </div>
-                                        {% if project.owner_id == user.id or user.is_admin %}
-                                        <button onclick="showCollaboratorModal('{{ project.id }}')"
-                                                class="ml-2 text-sm text-blue-600 hover:text-blue-900">
-                                            Manage
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                    <div class="flex items-center space-x-4">
-                                        {% if project.owner_id == user.id or user.is_admin %}
-                                        <button onclick="deleteProject('{{ project.path }}')"
-                                                class="text-red-600 hover:text-red-900">
-                                            Delete
-                                        </button>
-                                        {% if user.is_admin %}
-                                        <button onclick="showTransferModal('{{ project.id }}')"
-                                                class="text-blue-600 hover:text-blue-900">
-                                            Transfer
-                                        </button>
-                                        {% endif %}
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
+                        <tbody id="projects-list" class="bg-white divide-y divide-gray-200">
+                            <!-- Projects will be populated by JavaScript -->
                         </tbody>
                     </table>
                 {% else %}
@@ -136,6 +82,68 @@
         </div>
     </div>
 
+    <!-- Project Explorer Modal -->
+    <div id="project-explorer-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-start justify-center pt-10">
+        <div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Project Explorer: <span id="current-project-name"></span></h2>
+                <button onclick="hideProjectExplorer()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="flex justify-end mb-4 space-x-2">
+                <button onclick="showCreateItemModal('file')" 
+                        class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm">
+                    New File
+                </button>
+                <button onclick="showCreateItemModal('folder')" 
+                        class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm">
+                    New Folder
+                </button>
+            </div>
+            
+            <div class="overflow-auto flex-1 min-h-[300px] border rounded p-4">
+                <div id="project-tree"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Item in Project Modal -->
+    <div id="create-project-item-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium" id="create-item-title">Create New Item</h3>
+                <button onclick="hideCreateItemModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label for="new-item-name" class="block text-sm font-medium text-gray-700">Name</label>
+                    <input type="text" id="new-item-name" 
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    <input type="hidden" id="new-item-path">
+                    <input type="hidden" id="new-item-type">
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button onclick="hideCreateItemModal()"
+                            class="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">
+                        Cancel
+                    </button>
+                    <button onclick="createProjectItem()"
+                            class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        Create
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Collaborator Modal -->
     <div id="collaborator-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
         <div class="bg-white rounded-lg p-6 max-w-md w-full">
@@ -147,7 +155,9 @@
                         <select id="collaborator-select" class="block w-full rounded-md border-gray-300 shadow-sm p-2">
                             <option value="">Select a user</option>
                             {% for available_user in available_users %}
-                            <option value="{{ available_user.id }}">{{ available_user.username }}</option>
+                                {% if available_user.id != user.id %}
+                                <option value="{{ available_user.id }}">{{ available_user.username }}</option>
+                                {% endif %}
                             {% endfor %}
                         </select>
                         <button onclick="addCollaborator()"
@@ -182,7 +192,9 @@
                     <select id="new-owner-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
                         <option value="">Select a user</option>
                         {% for available_user in available_users %}
-                        <option value="{{ available_user.id }}">{{ available_user.username }}</option>
+                            {% if available_user.id != user.id %}
+                            <option value="{{ available_user.id }}">{{ available_user.username }}</option>
+                            {% endif %}
                         {% endfor %}
                     </select>
                 </div>
@@ -200,6 +212,6 @@
         </div>
     </div>
 
-    <script src="/static/js/project-manager.js"></script>
+    <script src="/static/js/home.js"></script>
 </body>
 </html>

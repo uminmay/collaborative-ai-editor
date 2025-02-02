@@ -140,3 +140,21 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[mod
     if user and user.verify_password(password):
         return user
     return None
+
+def delete_user(db: Session, user_id: int) -> bool:
+    """Delete a user"""
+    user = get_user_by_id(db, user_id)
+    if user and user.username != "admin":
+        db.delete(user)
+        db.commit()
+        return True
+    return False
+
+def update_user_role(db: Session, user_id: int, is_admin: bool) -> Optional[models.User]:
+    """Update user role"""
+    user = get_user_by_id(db, user_id)
+    if user and user.username != "admin":
+        user.is_admin = is_admin
+        db.commit()
+        db.refresh(user)
+    return user

@@ -76,6 +76,59 @@ async def get_home(
         }
     )
 
+@router.get("/api/projects")
+async def get_projects(
+    request: Request,
+    user: Optional[models.User] = Depends(get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    """Get all accessible projects for the user with details"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        # Get projects based on user role
+        if user.is_admin:
+            projects = crud.get_projects(db)
+        else:
+            projects = crud.get_user_accessible_projects(db, user.id)
+
+        # Format project data
+        project_list = []
+        for project in projects:
+            project_data = {
+                "id": project.id,
+                "name": project.name,
+                "path": project.path,
+                "owner": {
+                    "id": project.owner_id,
+                    "username": project.owner.username
+                },
+                "collaborators": [
+                    {
+                        "id": collab.id,
+                        "username": collab.username
+                    }
+                    for collab in project.collaborators
+                ],
+                "created_at": project.created_at,
+                "is_owner": project.owner_id == user.id,
+                "can_edit": user.is_admin or project.owner_id == user.id or user.id in [c.id for c in project.collaborators]
+            }
+            project_list.append(project_data)
+
+        return {
+            "projects": project_list,
+            "user": {
+                "id": user.id,
+                "is_admin": user.is_admin
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting projects: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve projects")
+
 @router.get("/editor")
 async def get_editor(
     request: Request,
@@ -250,6 +303,7 @@ async def delete_item(
 # API endpoint to get project structure
 @router.get("/api/structure")
 async def get_structure(
+    path: Optional[str] = None,
     user: Optional[models.User] = Depends(get_current_user),
     db: Session = Depends(database.get_db)
 ):
@@ -257,22 +311,47 @@ async def get_structure(
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
-        # If admin, show all projects
-        if user.is_admin:
-            return get_directory_structure(settings.PROJECTS_DIR)
+        # If no path provided, return empty structure
+        if not path:
+            return {}
         
-        # For regular users, filter only accessible projects
-        projects = crud.get_user_accessible_projects(db, user.id)
-        structure = {}
+        # Validate path and get project root
+        if not validate_path(path):
+            raise HTTPException(status_code=400, detail="Invalid path")
         
-        # Build structure only for accessible projects
-        for project in projects:
-            project_path = settings.PROJECTS_DIR / project.path
-            if project_path.exists():
-                structure[project.path] = get_directory_structure(project_path)
+        full_path = settings.PROJECTS_DIR / path.lstrip('/')
+        if not full_path.exists():
+            return {}  # Return empty if path doesn't exist
         
-        return structure
-    
+        # Get project root and verify access
+        project_name = get_project_root(path)
+        if not project_name:
+            raise HTTPException(status_code=400, detail="Invalid project path")
+        
+        project = crud.get_project(db, project_name)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Check if user has access
+        if not user.is_admin and project.owner_id != user.id and user not in project.collaborators:
+            raise HTTPException(status_code=403, detail="Not authorized to access this project")
+        
+        # Get the directory structure for this specific path
+        if full_path.is_dir():
+            structure = {}
+            for item in full_path.iterdir():
+                if item.name.startswith('.'):
+                    continue
+                if item.is_dir():
+                    structure[item.name] = 'directory'
+                else:
+                    structure[item.name] = 'file'
+            return structure
+        else:
+            return {}
+            
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting structure: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get directory structure")
