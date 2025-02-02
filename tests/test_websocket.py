@@ -4,6 +4,7 @@ from app.main import app
 import shutil
 import os
 from pathlib import Path
+import uuid
 
 @pytest.fixture
 def websocket_client(editor_client, test_db):
