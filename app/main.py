@@ -8,7 +8,13 @@ import logging
 
 from .core.settings import settings
 from .db import models, database, crud, schemas
-from .routers import auth_router, admin_router, projects_router, websocket_router
+from .routers import (
+    auth_router, 
+    admin_router, 
+    projects_router, 
+    websocket_router,
+    collaborations_router
+)
 
 # Configure logging
 logging.basicConfig(
@@ -47,6 +53,7 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(projects_router)
 app.include_router(websocket_router)
+app.include_router(collaborations_router)
 
 # Exception handlers
 @app.exception_handler(Exception)
@@ -68,11 +75,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         content={"message": exc.detail}
     )
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
 # Initialize database
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -80,7 +82,6 @@ models.Base.metadata.create_all(bind=database.engine)
 @app.on_event("startup")
 async def startup_event():
     try:
-        # Create admin user if it doesn't exist
         db = next(database.get_db())
         admin = crud.get_user_by_username(db, "admin")
         if not admin:
@@ -93,26 +94,15 @@ async def startup_event():
             logging.info("Admin user created successfully")
         else:
             logging.info("Admin user already exists")
-
-        # Ensure projects directory exists
-        settings.PROJECTS_DIR.mkdir(exist_ok=True)
-        logging.info(f"Projects directory initialized at {settings.PROJECTS_DIR}")
-
     except Exception as e:
         logging.error(f"Error in startup: {e}", exc_info=True)
         raise
 
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    logging.info("Application shutting down")
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower()
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)

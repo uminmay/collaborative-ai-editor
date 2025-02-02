@@ -1,8 +1,17 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import bcrypt
 from .database import Base
+
+# Project collaborators association table
+project_collaborators = Table(
+    'project_collaborators',
+    Base.metadata,
+    Column('project_id', Integer, ForeignKey('projects.id'), primary_key=True),
+    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
+    Column('added_at', DateTime(timezone=True), server_default=func.now())
+)
 
 class User(Base):
     __tablename__ = "users"
@@ -14,8 +23,15 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationship with projects
-    projects = relationship("Project", back_populates="creator")
+    # Relationship with owned projects
+    owned_projects = relationship("Project", back_populates="owner")
+    
+    # Relationship with collaborative projects
+    collaborative_projects = relationship(
+        "Project",
+        secondary=project_collaborators,
+        back_populates="collaborators"
+    )
 
     @staticmethod
     def hash_password(password: str) -> str:
@@ -36,9 +52,16 @@ class Project(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     path = Column(String, unique=True, index=True)
-    creator_id = Column(Integer, ForeignKey("users.id"))
+    owner_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationship with user
-    creator = relationship("User", back_populates="projects")
+    # Relationship with owner
+    owner = relationship("User", back_populates="owned_projects")
+    
+    # Relationship with collaborators
+    collaborators = relationship(
+        "User",
+        secondary=project_collaborators,
+        back_populates="collaborative_projects"
+    )

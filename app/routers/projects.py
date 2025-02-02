@@ -49,14 +49,31 @@ def get_project_root(path: str) -> str:
 @router.get("/", response_class=HTMLResponse)
 async def get_home(
     request: Request,
-    user: Optional[models.User] = Depends(get_current_user)
+    user: Optional[models.User] = Depends(get_current_user),
+    db: Session = Depends(database.get_db)
 ):
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     
+    # Get projects based on user role
+    if user.is_admin:
+        projects = crud.get_projects(db)
+    else:
+        projects = crud.get_user_accessible_projects(db, user.id)
+    
+    # Get available users for collaborator selection
+    available_users = []
+    if user.is_admin or any(project.owner_id == user.id for project in projects):
+        available_users = crud.get_users(db)
+    
     return templates.TemplateResponse(
         "home.html",
-        {"request": request, "user": user}
+        {
+            "request": request,
+            "user": user,
+            "projects": projects,
+            "available_users": available_users
+        }
     )
 
 @router.get("/editor")
@@ -74,42 +91,33 @@ async def get_editor(
         if not validate_path(path):
             raise HTTPException(status_code=400, detail="Invalid path")
         
-        # Check if file exists
+        # Check file exists
         full_path = settings.PROJECTS_DIR / path.lstrip('/')
         if not full_path.exists() or not full_path.is_file():
             raise HTTPException(status_code=404, detail="File not found")
         
-        # Check project access
+        # Get project root and verify access
         project_name = get_project_root(path)
+        if not project_name:
+            raise HTTPException(status_code=400, detail="Invalid project path")
+        
         project = crud.get_project(db, project_name)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         
-        # Check permissions
-        if not user.is_admin and project.creator_id != user.id:
+        # Check if user has access to project
+        if not user.is_admin and project.owner_id != user.id and user not in project.collaborators:
             raise HTTPException(status_code=403, detail="Not authorized to access this file")
         
         return templates.TemplateResponse(
             "editor.html",
             {"request": request, "path": path, "user": user}
         )
-        
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Editor error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error accessing file")
-
-@router.get("/api/structure")
-async def get_structure(user: Optional[models.User] = Depends(get_current_user)):
-    if not user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-    
-    try:
-        return get_directory_structure(settings.PROJECTS_DIR)
-    except Exception as e:
-        logger.error(f"Error getting structure: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get directory structure")
 
 @router.post("/api/create")
 async def create_item(
@@ -133,14 +141,20 @@ async def create_item(
 
         # For root level projects
         if path == '/':
+            full_path = settings.PROJECTS_DIR / name
+            if full_path.exists():
+                raise HTTPException(status_code=400, detail="Project already exists")
+
+            # Create project in database first
             project = crud.create_project(
                 db,
                 name=name,
                 path=name,
-                creator_id=user.id
+                owner_id=user.id
             )
-            new_path = settings.PROJECTS_DIR / name
-            new_path.mkdir(parents=True, exist_ok=True)
+            
+            # Create directory after successful database entry
+            full_path.mkdir(parents=True, exist_ok=True)
             return {"status": "success", "project": project.name}
         
         # For items within projects
@@ -149,17 +163,20 @@ async def create_item(
             if not project_name:
                 raise HTTPException(status_code=400, detail="Invalid project path")
 
-            # Verify project exists
+            # Verify project exists and check permissions
             project = crud.get_project(db, project_name)
             if not project:
                 raise HTTPException(status_code=404, detail="Project not found")
 
-            # Check permissions
-            if not user.is_admin and project.creator_id != user.id:
+            # Check if user has access
+            if not user.is_admin and project.owner_id != user.id and user not in project.collaborators:
                 raise HTTPException(status_code=403, detail="Not authorized to modify this project")
 
             # Create the new item
             new_path = settings.PROJECTS_DIR / path.lstrip('/') / name
+            if new_path.exists():
+                raise HTTPException(status_code=400, detail="Item already exists")
+
             if item_type == "folder":
                 new_path.mkdir(parents=True, exist_ok=True)
             else:
@@ -192,32 +209,35 @@ async def delete_item(
             raise HTTPException(status_code=400, detail="Invalid path")
 
         full_path = settings.PROJECTS_DIR / path.lstrip('/')
-        project_name = get_project_root(path)
+        if not full_path.exists():
+            raise HTTPException(status_code=404, detail="Path not found")
 
+        project_name = get_project_root(path)
         if not project_name:
             raise HTTPException(status_code=400, detail="Invalid project path")
 
-        # Get the project for permission checking
+        # Get the project and verify permissions
         project = crud.get_project(db, project_name)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Check permissions
-        if not user.is_admin and project.creator_id != user.id:
+        # Check if user has permission
+        if not user.is_admin and project.owner_id != user.id:
             raise HTTPException(status_code=403, detail="Not authorized to delete this item")
 
-        # Verify path exists
-        if not full_path.exists():
-            raise HTTPException(status_code=404, detail="Path not found")
-
-        # Delete the item
-        if full_path.is_dir():
-            if full_path.parent == settings.PROJECTS_DIR:
-                # This is a project root, delete from database too
-                crud.delete_project(db, path=full_path.name)
-            shutil.rmtree(full_path)
+        # Handle deletion based on item type
+        if full_path.is_dir() and full_path.parent == settings.PROJECTS_DIR:
+            # This is a project root - delete from database first
+            if crud.delete_project(db, path=full_path.name):
+                shutil.rmtree(full_path)
+            else:
+                raise HTTPException(status_code=500, detail="Failed to delete project from database")
         else:
-            full_path.unlink()
+            # This is a file or subfolder
+            if full_path.is_dir():
+                shutil.rmtree(full_path)
+            else:
+                full_path.unlink()
 
         return {"status": "success"}
         
@@ -226,3 +246,33 @@ async def delete_item(
     except Exception as e:
         logger.error(f"Delete item error: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to get project structure
+@router.get("/api/structure")
+async def get_structure(
+    user: Optional[models.User] = Depends(get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        # If admin, show all projects
+        if user.is_admin:
+            return get_directory_structure(settings.PROJECTS_DIR)
+        
+        # For regular users, filter only accessible projects
+        projects = crud.get_user_accessible_projects(db, user.id)
+        structure = {}
+        
+        # Build structure only for accessible projects
+        for project in projects:
+            project_path = settings.PROJECTS_DIR / project.path
+            if project_path.exists():
+                structure[project.path] = get_directory_structure(project_path)
+        
+        return structure
+    
+    except Exception as e:
+        logger.error(f"Error getting structure: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get directory structure")
