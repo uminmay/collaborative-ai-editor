@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 import shutil
+from app.db import schemas, crud, models, database
 import os
 from pathlib import Path
 import uuid

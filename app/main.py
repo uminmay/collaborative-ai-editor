@@ -148,9 +148,11 @@ def get_directory_structure(path: Path) -> Dict[str, Union[Dict, str]]:
 def validate_path(path: str) -> bool:
     """Validate path is safe and within project directory"""
     try:
-        # Normalize path separators
+        # Normalize path separators and handle Windows-style paths
         normalized_path = path.replace('\\', '/').lstrip('/')
-        if '..' in normalized_path or '//' in normalized_path:
+        
+        # Check for traversal attempts and invalid patterns
+        if '..' in normalized_path or '//' in normalized_path or '\\' in path:
             return False
             
         full_path = PROJECTS_DIR / normalized_path
