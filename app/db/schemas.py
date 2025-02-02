@@ -12,20 +12,10 @@ class User(UserBase):
     id: int
     is_admin: bool
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    username: str | None = None
-
-class LoginForm(BaseModel):
-    username: str
-    password: str
 
 class ProjectBase(BaseModel):
     name: str
@@ -36,9 +26,8 @@ class ProjectCreate(ProjectBase):
 
 class Project(ProjectBase):
     id: int
-    project_id: str
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

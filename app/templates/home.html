@@ -1,30 +1,98 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Projects List</title>
+    <title>Project Management</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        blue: {
-                            100: '#e3f2fd',
-                            500: '#2196f3',
-                            600: '#1e88e5',
-                            700: '#1976d2'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
 </head>
-<body>
-    <div id="root" class="container mx-auto px-4 py-8"></div>
-    <script src="/static/js/folder-structure.js"></script>
+<body class="bg-gray-100">
+    {% include "components/nav.html" %}
+    
+    <div class="container mx-auto p-4">
+        <div class="max-w-4xl mx-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold">Projects</h1>
+                <div class="space-x-4">
+                    <button onclick="showCreateProjectModal()" 
+                            class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        New Project
+                    </button>
+                </div>
+            </div>
+
+            <div id="file-tree" class="bg-white rounded-lg shadow p-6">
+                <!-- File tree will be populated by JavaScript -->
+                <div id="empty-state" class="text-center text-gray-500 py-8 hidden">
+                    <p class="text-lg mb-4">No projects yet</p>
+                    <button onclick="showCreateProjectModal()" 
+                            class="text-blue-500 hover:text-blue-700">
+                        Create your first project
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Project Modal -->
+    <div id="create-project-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full">
+            <h2 class="text-xl font-bold mb-4">Create New Project</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="project-name" class="block text-sm font-medium text-gray-700">Project Name</label>
+                    <input type="text" id="project-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button onclick="hideCreateProjectModal()" 
+                            class="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">
+                        Cancel
+                    </button>
+                    <button onclick="createProject()" 
+                            class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        Create
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Item Modal -->
+    <div id="create-item-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full">
+            <h2 class="text-xl font-bold mb-4">Create New Item</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Type</label>
+                    <div class="mt-1 space-x-4">
+                        <label class="inline-flex items-center">
+                            <input type="radio" name="type" value="file" class="form-radio">
+                            <span class="ml-2">File</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="radio" name="type" value="folder" class="form-radio">
+                            <span class="ml-2">Folder</span>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label for="item-name" class="block text-sm font-medium text-gray-700">Name</label>
+                    <input type="text" id="item-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    <input type="hidden" id="current-path">
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button onclick="hideCreateItemModal()" 
+                            class="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">
+                        Cancel
+                    </button>
+                    <button onclick="createItem()" 
+                            class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        Create
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/home.js"></script>
 </body>
 </html>

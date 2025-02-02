@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-2xl mx-auto">
+            <div class="flex justify-between items-center mb-8">
+                <h1 class="text-3xl font-bold">Admin Dashboard</h1>
+                <a href="/logout" class="text-blue-500 hover:text-blue-700">Logout</a>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <a href="/admin/user-management" 
+                   class="block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow">
+                    <h2 class="text-xl font-semibold mb-2">User Management</h2>
+                    <p class="text-gray-600">Create and manage users</p>
+                </a>
+                
+                <a href="/admin/project-management" 
+                   class="block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow">
+                    <h2 class="text-xl font-semibold mb-2">Project Management</h2>
+                    <p class="text-gray-600">Manage projects and files</p>
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
