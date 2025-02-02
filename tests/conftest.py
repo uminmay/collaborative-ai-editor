@@ -10,6 +10,11 @@ from app.db import crud, models, schemas
 from typing import Generator
 import os
 import uuid
+import shutil
+
+SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
+SECRET_KEY = "test_secret_key"
+ALGORITHM = "HS256"
 
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test.db"
 SECRET_KEY = "test_secret_key"
