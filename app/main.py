@@ -148,17 +148,48 @@ def get_directory_structure(path: Path) -> Dict[str, Union[Dict, str]]:
 def validate_path(path: str) -> bool:
     """Validate path is safe and within project directory"""
     try:
-        # Normalize path separators to handle Windows-style paths
-        normalized_path = path.replace('\\', '/')
-        full_path = PROJECTS_DIR / normalized_path.lstrip('/')
-        
-        # Check for path traversal and validity
-        if '..' in path or '//' in path:
+        # Normalize path separators
+        normalized_path = path.replace('\\', '/').lstrip('/')
+        if '..' in normalized_path or '//' in normalized_path:
             return False
             
+        full_path = PROJECTS_DIR / normalized_path
         return full_path.resolve().is_relative_to(PROJECTS_DIR.resolve())
     except (ValueError, RuntimeError):
         return False
+
+@app.delete("/api/delete")
+async def delete_item(
+    item: DeleteItem,
+    db: Session = Depends(database.get_db),
+    user: Optional[models.User] = Depends(get_current_user)
+):
+    """Delete a file or folder"""
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    try:
+        if not item.path:
+            raise HTTPException(status_code=400, detail="Path cannot be empty")
+            
+        if not validate_path(item.path):
+            raise HTTPException(status_code=400, detail="Invalid path")
+
+        full_path = PROJECTS_DIR / item.path.replace('\\', '/').lstrip('/')
+            
+        if not full_path.exists():
+            raise HTTPException(status_code=404, detail="Path not found")
+            
+        if full_path.is_dir():
+            shutil.rmtree(full_path)
+        else:
+            full_path.unlink()
+        return {"status": "success"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete item error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
 
 # Authentication routes
 @app.get("/login", response_class=HTMLResponse)
@@ -304,50 +335,6 @@ async def create_item(
     except Exception as e:
         logger.error(f"Create item error: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
-
-@app.delete("/api/delete")
-async def delete_item(
-    item: DeleteItem,
-    db: Session = Depends(database.get_db),
-    user: Optional[models.User] = Depends(get_current_user)
-):
-    """Delete a file or folder"""
-    if not user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-    
-    try:
-        if not item.path:
-            raise HTTPException(status_code=400, detail="Path cannot be empty")
-            
-        # Validate path before checking existence
-        if not validate_path(item.path):
-            raise HTTPException(status_code=400, detail="Invalid path")
-
-        # Check if path points outside project directory
-        full_path = PROJECTS_DIR / item.path.lstrip('/')
-        try:
-            if not full_path.resolve().is_relative_to(PROJECTS_DIR.resolve()):
-                raise HTTPException(status_code=400, detail="Invalid path")
-        except (ValueError, RuntimeError):
-            raise HTTPException(status_code=400, detail="Invalid path")
-            
-        # Only check existence after path validation
-        if not full_path.exists():
-            raise HTTPException(status_code=404, detail="Path not found")
-            
-        if full_path.is_dir():
-            shutil.rmtree(full_path)
-            if '/' not in item.path:
-                crud.delete_project(db, path=str(full_path))
-        else:
-            full_path.unlink()
-        return {"status": "success"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Delete item error: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e))
-
 
 @app.get("/api/projects")
 def read_projects(
