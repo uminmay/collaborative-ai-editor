@@ -2,29 +2,118 @@
 <html>
 <head>
     <title>Code Editor</title>
-    <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Editor container */
+        .editor-container {
+            position: relative;
+            margin: 20px;
+        }
+
+        /* Editor wrapper with line numbers */
+        .editor-wrapper {
+            display: flex;
+            min-height: calc(100vh - 200px);
+            border-radius: 6px;
+            overflow: hidden;
+            background: #1E1E1E;
+        }
+
+        /* Line numbers styling */
+        .line-numbers {
+            padding: 16px 12px;
+            background: #252526;
+            color: #858585;
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            text-align: right;
+            user-select: none;
+            min-width: 50px;
+            border-right: 1px solid #333;
+            white-space: pre-line;  /* Allow line breaks */
+            overflow-y: hidden;     /* Hide vertical scroll */
+        }
+
+        /* Main editor textarea */
+        #editor {
+            flex-grow: 1;
+            padding: 16px;
+            background: #1E1E1E;
+            color: #FFFFFF;
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            border: none;
+            resize: none;
+            outline: none;
+        }
+
+        /* Active users section */
+        .active-users {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .user-avatar {
+            display: flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-weight: 500;
+            color: white;
+        }
+
+        /* Cursor styles */
+        .remote-cursor {
+            position: absolute;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .cursor-label {
+            position: absolute;
+            top: -20px;
+            left: 0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            white-space: nowrap;
+            color: white;
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
     {% include "components/nav.html" %}
-    
-    <div class="container mx-auto p-4">
-        <div class="bg-white rounded-lg shadow-lg">
-            <div class="border-b p-4 flex justify-between items-center">
+
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header section -->
+        <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+            <div class="flex justify-between items-center">
                 <div class="flex items-center space-x-4">
                     <h1 id="filepath" class="text-lg font-semibold"></h1>
                     <span id="save-status" class="text-sm text-gray-500"></span>
                 </div>
-                <a href="/" class="text-blue-500 hover:text-blue-700">Back to Projects</a>
+                <div class="flex items-center space-x-4">
+                    <div id="active-users" class="flex items-center space-x-2">
+                        <!-- Active users will be inserted here -->
+                    </div>
+                    <a href="/" class="text-blue-600 hover:text-blue-800">Back to Projects</a>
+                </div>
             </div>
-            
-            <div class="p-4">
-                <textarea id="editor" 
-                          class="w-full h-[calc(100vh-200px)] font-mono text-sm p-4 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          spellcheck="false"></textarea>
+        </div>
+
+        <!-- Editor section -->
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <div class="editor-wrapper">
+                <div id="line-numbers" class="line-numbers">1</div>
+                <textarea id="editor" spellcheck="false"></textarea>
             </div>
         </div>
     </div>
+
     <script src="/static/js/editor.js"></script>
 </body>
 </html>

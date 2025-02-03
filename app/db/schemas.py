@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List, Dict
+from ipaddress import IPv4Address, IPv6Address
 
 class UserBase(BaseModel):
     username: str
@@ -13,6 +14,39 @@ class User(UserBase):
     is_admin: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class UserSessionBase(BaseModel):
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+
+class UserSessionCreate(UserSessionBase):
+    user_id: int
+
+class UserSession(UserSessionBase):
+    id: int
+    session_id: str
+    user_id: int
+    expires_at: datetime
+    created_at: datetime
+    last_activity: datetime
+
+    class Config:
+        from_attributes = True
+
+class ActiveEditorBase(BaseModel):
+    file_path: str
+
+class ActiveEditorCreate(ActiveEditorBase):
+    user_id: int
+
+class ActiveEditor(ActiveEditorBase):
+    id: int
+    user_id: int
+    opened_at: datetime
+    last_activity: datetime
 
     class Config:
         from_attributes = True
@@ -46,3 +80,8 @@ class Project(ProjectBase):
 class CollaboratorUpdate(BaseModel):
     user_id: int
     action: str  # "add" or "remove"
+
+class SessionInfo(BaseModel):
+    session_id: str
+    active_editors: Optional[List[str]] = None
+    last_activity: datetime

@@ -1,7 +1,9 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Table, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import bcrypt
+import uuid
+from datetime import datetime, timedelta
 from .database import Base
 
 # Project collaborators association table
@@ -33,6 +35,10 @@ class User(Base):
         back_populates="collaborators"
     )
 
+    # Relationship with sessions and active editors
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+    active_editors = relationship("ActiveEditor", back_populates="user", cascade="all, delete-orphan")
+
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash a password using bcrypt"""
@@ -45,6 +51,46 @@ class User(Base):
             password.encode('utf-8'),
             self.password_hash.encode('utf-8')
         )
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, unique=True, index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    ip_address = Column(String)
+    user_agent = Column(String)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_activity = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationship with user
+    user = relationship("User", back_populates="sessions")
+
+    @classmethod
+    def create_session_id(cls):
+        return str(uuid.uuid4())
+
+    @property
+    def is_expired(self):
+        return datetime.now(self.expires_at.tzinfo) > self.expires_at
+
+class ActiveEditor(Base):
+    __tablename__ = "active_editors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    file_path = Column(String, nullable=False)
+    opened_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_activity = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationship with user
+    user = relationship("User", back_populates="active_editors")
+
+    # Create index for faster lookups
+    __table_args__ = (
+        Index('idx_user_file', user_id, file_path, unique=True),
+    )
 
 class Project(Base):
     __tablename__ = "projects"
