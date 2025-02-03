@@ -6,15 +6,11 @@ let saveStatus = document.getElementById('save-status');
 let editor = document.getElementById('editor');
 let lineNumbers = document.getElementById('line-numbers');
 let activeUsers = document.getElementById('active-users');
-let reconnectAttempts = 0;
-const maxReconnectAttempts = 5;
 
 // Keep track of current user
 let currentUserId = null;
-let currentUsername = null;
-let currentUserColor = null;
 
-// Function to update the status message
+// Basic status update function
 function updateStatus(message, duration = 2000, isError = false) {
     if (!saveStatus) return;
     saveStatus.textContent = message;
@@ -26,23 +22,18 @@ function updateStatus(message, duration = 2000, isError = false) {
     }
 }
 
-// Function to update line numbers
+// Line numbers update
 function updateLineNumbers() {
     if (!lineNumbers || !editor) return;
-    
     const lines = editor.value.split('\n');
     const numbers = Array.from({ length: lines.length }, (_, i) => {
-        // Pad numbers with spaces for right alignment
         return String(i + 1).padStart(3, ' ');
     }).join('\n');
-    
     lineNumbers.textContent = numbers;
-    
-    // Make sure line numbers area scrolls with editor
     lineNumbers.scrollTop = editor.scrollTop;
 }
 
-// Function to save content
+// Save content function
 function saveContent() {
     if (!currentPath || !ws || ws.readyState !== WebSocket.OPEN || editor.disabled) {
         return;
@@ -57,7 +48,7 @@ function saveContent() {
     }));
 }
 
-// Function for auto-save
+// Debounced auto-save
 function autoSave() {
     if (lastSaveTimeout) {
         clearTimeout(lastSaveTimeout);
@@ -65,10 +56,9 @@ function autoSave() {
     lastSaveTimeout = setTimeout(saveContent, 1000);
 }
 
-// Update the active users display
+// Update active users display
 function updateUsersList(users) {
     if (!activeUsers) return;
-    
     activeUsers.innerHTML = users.map(user => `
         <div class="user-avatar" style="background-color: ${user.color}">
             ${user.username}
@@ -76,20 +66,22 @@ function updateUsersList(users) {
     `).join('');
 }
 
-// WebSocket connection handling
+// WebSocket connection
 function connectWebSocket() {
     ws = new WebSocket(`ws://${window.location.host}/ws`);
 
     ws.onopen = () => {
         updateStatus('Connected');
-        reconnectAttempts = 0;
-
-        // Load initial file content
+        
+        // Load file content
         if (currentPath) {
-            ws.send(JSON.stringify({
-                type: 'load',
-                path: currentPath
-            }));
+            // Wait 1 second before requesting file content
+            setTimeout(() => {
+                ws.send(JSON.stringify({
+                    type: 'load',
+                    path: currentPath
+                }));
+            }, 1000);
         }
     };
 
@@ -100,18 +92,12 @@ function connectWebSocket() {
             case 'load':
                 editor.value = data.content;
                 editor.disabled = false;
+                currentUserId = data.current_user_id;
                 updateLineNumbers();
                 
-                // Set current user info
-                currentUserId = data.current_user_id;
-                currentUsername = data.username;
-                currentUserColor = data.color;
-                
-                // Show active editors
                 if (data.active_editors) {
                     updateUsersList(data.active_editors);
                 }
-                
                 updateStatus('File loaded');
                 break;
 
@@ -119,48 +105,26 @@ function connectWebSocket() {
                 updateStatus('Saved successfully');
                 break;
 
+            case 'content_update':
+                // Only update content if it's from another user
+                if (data.user && data.user.id !== currentUserId) {
+                    const cursorPos = editor.selectionStart;
+                    editor.value = data.content;
+                    editor.selectionStart = cursorPos;
+                    editor.selectionEnd = cursorPos;
+                    updateLineNumbers();
+                    updateStatus(`Changes received from ${data.user.username}`);
+                }
+                break;
+
             case 'error':
                 updateStatus(data.message, 3000, true);
-                break;
-
-            case 'editor_joined':
-                if (data.user.id !== currentUserId) {
-                    updateStatus(`${data.user.username} joined`, 2000);
-                    ws.send(JSON.stringify({
-                        type: 'check_active',
-                        path: currentPath
-                    }));
-                }
-                break;
-
-            case 'editor_left':
-                if (data.user.id !== currentUserId) {
-                    updateStatus(`${data.user.username} left`, 2000);
-                    ws.send(JSON.stringify({
-                        type: 'check_active',
-                        path: currentPath
-                    }));
-                }
-                break;
-
-            case 'active_editors':
-                updateUsersList(data.users);
-                if (data.content && data.content !== editor.value) {
-                    editor.value = data.content;
-                    updateLineNumbers();
-                }
                 break;
         }
     };
 
     ws.onclose = () => {
-        if (reconnectAttempts < maxReconnectAttempts) {
-            updateStatus('Connection lost. Reconnecting...', 0);
-            reconnectAttempts++;
-            setTimeout(connectWebSocket, 1000 * Math.pow(2, reconnectAttempts));
-        } else {
-            updateStatus('Connection lost. Please refresh the page.', 0, true);
-        }
+        updateStatus('Connection lost. Please refresh the page.', 0, true);
     };
 
     ws.onerror = (error) => {
@@ -172,9 +136,10 @@ function connectWebSocket() {
 // Initialize
 if (currentPath) {
     document.getElementById('filepath').textContent = currentPath;
+    editor.disabled = true;  // Disable until content is loaded
     connectWebSocket();
 
-    // Set up editor event listeners
+    // Event listeners
     editor.addEventListener('input', () => {
         autoSave();
         updateLineNumbers();
@@ -186,7 +151,7 @@ if (currentPath) {
         }
     });
 
-    // Check active editors periodically
+    // Periodic check for active users
     setInterval(() => {
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
