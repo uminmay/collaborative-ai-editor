@@ -1,15 +1,17 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
     <style>
         /* Editor container */
         .editor-container {
             position: relative;
             margin: 20px;
         }
-
         /* Editor wrapper with line numbers */
         .editor-wrapper {
             display: flex;
@@ -18,7 +20,6 @@
             overflow: hidden;
             background: #1E1E1E;
         }
-
         /* Line numbers styling */
         .line-numbers {
             padding: 16px 12px;
@@ -31,10 +32,9 @@
             user-select: none;
             min-width: 50px;
             border-right: 1px solid #333;
-            white-space: pre-line;  /* Allow line breaks */
-            overflow-y: hidden;     /* Hide vertical scroll */
+            white-space: pre-line;
+            overflow-y: hidden;
         }
-
         /* Main editor textarea */
         #editor {
             flex-grow: 1;
@@ -48,7 +48,6 @@
             resize: none;
             outline: none;
         }
-
         /* Active users section */
         .active-users {
             display: flex;
@@ -56,7 +55,6 @@
             gap: 10px;
             padding: 10px;
         }
-
         .user-avatar {
             display: flex;
             align-items: center;
@@ -65,14 +63,12 @@
             font-weight: 500;
             color: white;
         }
-
         /* Cursor styles */
         .remote-cursor {
             position: absolute;
             pointer-events: none;
             z-index: 10;
         }
-
         .cursor-label {
             position: absolute;
             top: -20px;
@@ -83,11 +79,24 @@
             white-space: nowrap;
             color: white;
         }
+        /* Active users dropdown */
+        #active-users-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            z-index: 50;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            max-height: 300px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
     {% include "components/nav.html" %}
-
+    
     <div class="container mx-auto px-4 py-6">
         <!-- Header section -->
         <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
@@ -96,7 +105,16 @@
                     <h1 id="filepath" class="text-lg font-semibold"></h1>
                     <span id="save-status" class="text-sm text-gray-500"></span>
                 </div>
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-4 relative">
+                    <div class="relative">
+                        <button id="active-users-toggle" class="btn flex items-center space-x-2 bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-md">
+                            <span>Active Users</span>
+                            <span id="active-users-count" class="bg-blue-500 text-white text-xs rounded-full px-2 py-0.5">0</span>
+                        </button>
+                        <div id="active-users-dropdown" class="dropdown hidden mt-1 absolute right-0 w-64">
+                            <!-- Dropdown content will be dynamically populated -->
+                        </div>
+                    </div>
                     <div id="active-users" class="flex items-center space-x-2">
                         <!-- Active users will be inserted here -->
                     </div>
@@ -104,7 +122,7 @@
                 </div>
             </div>
         </div>
-
+        
         <!-- Editor section -->
         <div class="bg-white rounded-lg shadow-sm p-4">
             <div class="editor-wrapper">

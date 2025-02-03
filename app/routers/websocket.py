@@ -75,9 +75,9 @@ async def get_active_editors_info(file_path: str, current_user_id: int) -> list:
         if user_id == current_user_id:
             continue
             
-        # Check if the user has been active recently (within last 30 seconds)
+        # Extend timeout to 60 seconds to be more lenient
         last_update = connection.get("last_cursor_update", current_time)
-        if current_time - last_update > 30:
+        if current_time - last_update > 60:
             continue
             
         editors.append({
@@ -267,6 +267,16 @@ async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(databas
                         exclude_user=user.id
                     )
                     
+                    # Broadcast active editors after save
+                    active_editors = await get_active_editors_info(path, user.id)
+                    await broadcast_to_file(
+                        path,
+                        {
+                            "type": "active_editors",
+                            "users": active_editors
+                        }
+                    )
+                    
                 except Exception as e:
                     logger.error(f"Error saving file: {e}")
                     await websocket.send_json({
@@ -357,3 +367,14 @@ async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(databas
                     }
                 }
             )
+            
+            # Broadcast updated active editors list
+            if current_file in active_connections:
+                active_editors = await get_active_editors_info(current_file, user.id)
+                await broadcast_to_file(
+                    current_file,
+                    {
+                        "type": "active_editors",
+                        "users": active_editors
+                    }
+                )

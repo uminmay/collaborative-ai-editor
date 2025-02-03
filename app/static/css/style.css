@@ -69,64 +69,6 @@ h1 {
     background-color: #ffebee;
 }
 
-/* Editor Styles */
-.toolbar {
-    margin-bottom: 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #eee;
-}
-
-.file-info {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-#filepath {
-    margin: 0;
-    color: #333;
-}
-
-#save-status {
-    color: #666;
-    font-size: 0.9em;
-}
-
-.back-button {
-    padding: 8px 16px;
-    background-color: #f0f0f0;
-    color: #333;
-    text-decoration: none;
-    border-radius: 4px;
-    transition: background-color 0.2s;
-}
-
-.back-button:hover {
-    background-color: #e0e0e0;
-}
-
-#editor {
-    width: 100%;
-    height: calc(100vh - 160px);
-    padding: 15px;
-    font-family: 'Courier New', monospace;
-    font-size: 14px;
-    line-height: 1.5;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    resize: vertical;
-    box-sizing: border-box;
-}
-
-#editor:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
-}
-
 /* Form Styles */
 .create-form {
     margin-bottom: 1rem;
@@ -162,4 +104,42 @@ h1 {
     border-radius: 4px;
     color: #721c24;
     margin-bottom: 1rem;
+}
+
+/* Active users styling */
+.user-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: bold;
+    color: white;
+    margin-right: 5px;
+}
+
+/* Dropdown styling */
+.dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 50;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.dropdown-item {
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.dropdown-item:hover {
+    background-color: #f8f9fa;
 }
