@@ -47,12 +47,39 @@ async function loadProjects() {
 }
 
 function renderProjects() {
+    const projectListContainer = document.querySelector('.bg-white.rounded-lg.shadow.overflow-hidden');
+    
     if (!projects.length) {
-        if (projectsList) projectsList.classList.add('hidden');
-        if (emptyState) emptyState.classList.remove('hidden');
+        // Hide the table container
+        if (projectListContainer) projectListContainer.innerHTML = `
+            <div id="empty-state" class="text-center text-gray-500 py-8">
+                <p class="text-lg mb-4">No projects yet</p>
+                <button onclick="showCreateProjectModal()" 
+                        class="text-blue-500 hover:text-blue-700">
+                    Create your first project
+                </button>
+            </div>
+        `;
         return;
     }
 
+    // Show table with projects
+    projectListContainer.innerHTML = `
+        <table class="min-w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Collaborators</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="projects-list" class="bg-white divide-y divide-gray-200"></tbody>
+        </table>
+    `;
+
+    const projectsList = document.getElementById('projects-list');
     if (projectsList) {
         projectsList.classList.remove('hidden');
         if (emptyState) emptyState.classList.add('hidden');
@@ -144,6 +171,7 @@ async function createProject() {
         }
         
         hideCreateProjectModal();
+        // Reload projects immediately after creation
         await loadProjects();
     } catch (error) {
         console.error('Error creating project:', error);
