@@ -10,6 +10,14 @@ let activeUsersToggle = document.getElementById('active-users-toggle');
 let activeUsersDropdown = document.getElementById('active-users-dropdown');
 let activeUsersCount = document.getElementById('active-users-count');
 
+// Groq completion variables
+let currentCompletion = null;
+let completionTimeout = null;
+let isProcessingCompletion = false;
+let isWaitingForAcceptance = false;
+let originalContent = '';
+let completionDebounceTime = 2000; // 2 seconds
+
 // Keep track of current user
 let currentUserId = null;
 
@@ -104,6 +112,98 @@ function autoSave() {
     lastSaveTimeout = setTimeout(saveContent, 1000);
 }
 
+// Cursor position tracking
+function trackCursorPosition() {
+    if (!editor || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    ws.send(JSON.stringify({
+        type: 'cursor_update',
+        path: currentPath,
+        position: editor.selectionStart
+    }));
+}
+
+// Show completion in editor
+function showCompletion(completion, cursorPosition) {
+    if (!completion || !editor || isWaitingForAcceptance) return;
+    
+    // Store original content
+    if (!currentCompletion) {
+        originalContent = editor.value;
+    }
+    
+    // Get the current cursor position
+    const beforeCursor = editor.value.substring(0, cursorPosition);
+    const afterCursor = editor.value.substring(cursorPosition);
+    
+    // Insert the completion
+    editor.value = beforeCursor + completion + afterCursor;
+    
+    // Store completion info
+    currentCompletion = {
+        text: completion,
+        position: cursorPosition,
+        originalContent: originalContent
+    };
+    
+    isWaitingForAcceptance = true;
+}
+
+// Remove completion
+function removeCompletion() {
+    if (currentCompletion && currentCompletion.originalContent) {
+        editor.value = currentCompletion.originalContent;
+        editor.selectionStart = currentCompletion.position;
+        editor.selectionEnd = currentCompletion.position;
+    }
+    currentCompletion = null;
+    originalContent = '';
+    isWaitingForAcceptance = false;
+}
+
+// Accept completion
+function acceptCompletion() {
+    if (!currentCompletion) return;
+    
+    const newContent = editor.value;
+    removeCompletion(); // Clear completion state
+    editor.value = newContent; // Keep the completed content
+    
+    // Save the accepted completion
+    ws.send(JSON.stringify({
+        type: 'accept_completion',
+        content: newContent
+    }));
+    
+    isWaitingForAcceptance = false;
+    isProcessingCompletion = false;
+    autoSave();
+    updateLineNumbers();
+}
+
+// Request completion from server
+function requestCompletion() {
+    if (!ws || ws.readyState !== WebSocket.OPEN || isProcessingCompletion || isWaitingForAcceptance) {
+        return;
+    }
+    
+    const cursorPosition = editor.selectionStart;
+    
+    if (completionTimeout) {
+        clearTimeout(completionTimeout);
+    }
+    
+    completionTimeout = setTimeout(() => {
+        console.log('Requesting completion...');
+        ws.send(JSON.stringify({
+            type: 'request_completion',
+            content: editor.value,
+            cursor_position: cursorPosition
+        }));
+        isProcessingCompletion = true;
+    }, completionDebounceTime);
+}
+
 // WebSocket connection
 function connectWebSocket() {
     ws = new WebSocket(`ws://${window.location.host}/ws`);
@@ -111,9 +211,7 @@ function connectWebSocket() {
     ws.onopen = () => {
         updateStatus('Connected');
         
-        // Load file content
         if (currentPath) {
-            // Wait 1 second before requesting file content
             setTimeout(() => {
                 ws.send(JSON.stringify({
                     type: 'load',
@@ -125,6 +223,7 @@ function connectWebSocket() {
 
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        console.log('Received message:', data.type);
         
         switch (data.type) {
             case 'load':
@@ -144,7 +243,6 @@ function connectWebSocket() {
                 break;
 
             case 'content_update':
-                // Only update content if it's from another user
                 if (data.user && data.user.id !== currentUserId) {
                     const cursorPos = editor.selectionStart;
                     editor.value = data.content;
@@ -161,7 +259,6 @@ function connectWebSocket() {
 
             case 'editor_joined':
             case 'editor_left':
-                // Trigger active users check
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({
                         type: 'check_active',
@@ -170,12 +267,21 @@ function connectWebSocket() {
                 }
                 break;
 
-            case 'error':
-                updateStatus(data.message, 3000, true);
+            case 'completion_suggestion':
+                console.log('Received completion suggestion');
+                isProcessingCompletion = false;
+                if (data.completion && !isWaitingForAcceptance) {
+                    showCompletion(data.completion, data.cursor_position);
+                }
                 break;
 
+            case 'error':
+                console.log('Received error:', data.message);
+                isProcessingCompletion = false;
+                updateStatus(data.message, 3000, true);
+                break;
+                
             case 'cursor_update':
-                // Optional: Implement cursor visualization for other users
                 console.log('Cursor update received', data);
                 break;
         }
@@ -193,39 +299,40 @@ function connectWebSocket() {
     };
 }
 
-// Cursor position tracking
-function trackCursorPosition() {
-    if (!editor || !ws || ws.readyState !== WebSocket.OPEN) return;
-
-    ws.send(JSON.stringify({
-        type: 'cursor_update',
-        path: currentPath,
-        position: editor.selectionStart
-    }));
-}
-
 // Initialize
 if (currentPath) {
-    // Set filepath display
     const filepathElement = document.getElementById('filepath');
     if (filepathElement) {
         filepathElement.textContent = currentPath;
     }
 
-    // Disable editor until content is loaded
     editor.disabled = true;
-
-    // Connect WebSocket
     connectWebSocket();
 
     // Event listeners
     editor.addEventListener('input', () => {
+        console.log('Input event triggered');
+        if (currentCompletion) {
+            removeCompletion(); // Remove any existing completion
+        }
         autoSave();
         updateLineNumbers();
+        isProcessingCompletion = false;
+        isWaitingForAcceptance = false;
+        requestCompletion();
     });
 
     editor.addEventListener('keyup', trackCursorPosition);
     editor.addEventListener('click', trackCursorPosition);
+
+    editor.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab' && currentCompletion) {
+            e.preventDefault();
+            acceptCompletion();
+        } else if (currentCompletion) {
+            removeCompletion();
+        }
+    });
 
     editor.addEventListener('scroll', () => {
         if (lineNumbers) {
@@ -233,13 +340,11 @@ if (currentPath) {
         }
     });
 
-    // Active users dropdown toggle
     if (activeUsersToggle && activeUsersDropdown) {
         activeUsersToggle.addEventListener('click', () => {
             activeUsersDropdown.classList.toggle('hidden');
         });
 
-        // Close dropdown when clicking outside
         document.addEventListener('click', (event) => {
             if (activeUsersDropdown && !activeUsersToggle.contains(event.target) 
                 && !activeUsersDropdown.contains(event.target)) {

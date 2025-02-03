@@ -10,6 +10,7 @@ import random
 
 from ..core.settings import settings
 from ..db import crud, models, database, schemas
+from ..services.groq_service import groq_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -339,6 +340,64 @@ async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(databas
                     })
                 except Exception as e:
                     logger.error(f"Error checking active editors: {e}")
+            
+            elif message["type"] == "request_completion":
+                if not current_file:
+                    continue
+                    
+                content = message.get("content")
+                cursor_position = message.get("cursor_position", 0)
+                
+                if content is None:
+                    continue
+                
+                completion = await groq_service.get_code_completion(content, cursor_position)
+                
+                if completion:
+                    await websocket.send_json({
+                        "type": "completion_suggestion",
+                        "completion": completion,
+                        "cursor_position": cursor_position
+                    })
+
+            elif message["type"] == "accept_completion":
+                if not current_file:
+                    continue
+                    
+                content = message.get("content")
+                if content is None:
+                    continue
+                
+                try:
+                    full_path = settings.PROJECTS_DIR / current_file.lstrip("/")
+                    full_path.write_text(content)
+                    
+                    await websocket.send_json({
+                        "type": "save",
+                        "status": "success"
+                    })
+                    
+                    # Broadcast to other users
+                    await broadcast_to_file(
+                        current_file,
+                        {
+                            "type": "content_update",
+                            "content": content,
+                            "user": {
+                                "id": user.id,
+                                "username": user.username,
+                                "color": user_color
+                            }
+                        },
+                        exclude_user=user.id
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"Error saving accepted completion: {e}")
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": str(e)
+                    })
     
     except WebSocketDisconnect:
         logger.info(f"Client disconnected: {user.username}")

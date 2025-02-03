@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/style.css">
     <style>
         /* Editor container */
         .editor-container {
             position: relative;
             margin: 20px;
         }
+
         /* Editor wrapper with line numbers */
         .editor-wrapper {
             display: flex;
@@ -19,7 +19,9 @@
             border-radius: 6px;
             overflow: hidden;
             background: #1E1E1E;
+            position: relative;
         }
+
         /* Line numbers styling */
         .line-numbers {
             padding: 16px 12px;
@@ -35,6 +37,7 @@
             white-space: pre-line;
             overflow-y: hidden;
         }
+
         /* Main editor textarea */
         #editor {
             flex-grow: 1;
@@ -47,7 +50,9 @@
             border: none;
             resize: none;
             outline: none;
+            tab-size: 4;
         }
+
         /* Active users section */
         .active-users {
             display: flex;
@@ -55,6 +60,7 @@
             gap: 10px;
             padding: 10px;
         }
+
         .user-avatar {
             display: flex;
             align-items: center;
@@ -63,12 +69,14 @@
             font-weight: 500;
             color: white;
         }
+
         /* Cursor styles */
         .remote-cursor {
             position: absolute;
             pointer-events: none;
             z-index: 10;
         }
+
         .cursor-label {
             position: absolute;
             top: -20px;
@@ -79,6 +87,7 @@
             white-space: nowrap;
             color: white;
         }
+
         /* Active users dropdown */
         #active-users-dropdown {
             position: absolute;
@@ -91,6 +100,51 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             max-height: 300px;
             overflow-y: auto;
+        }
+
+        /* Completion text styling */
+        .completion-text {
+            color: #666;
+            font-style: italic;
+            display: inline-block;
+            background-color: rgba(100, 100, 100, 0.1);
+            border-radius: 2px;
+            padding: 0 2px;
+        }
+
+        /* Status bar styling */
+        .status-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 4px 8px;
+            background: #252526;
+            color: #858585;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Scrollbar styling */
+        #editor::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+
+        #editor::-webkit-scrollbar-track {
+            background: #1E1E1E;
+        }
+
+        #editor::-webkit-scrollbar-thumb {
+            background-color: #424242;
+            border-radius: 6px;
+            border: 3px solid #1E1E1E;
+        }
+
+        #editor::-webkit-scrollbar-thumb:hover {
+            background-color: #525252;
         }
     </style>
 </head>
@@ -128,10 +182,17 @@
             <div class="editor-wrapper">
                 <div id="line-numbers" class="line-numbers">1</div>
                 <textarea id="editor" spellcheck="false"></textarea>
+                <div class="status-bar">
+                    <div class="flex items-center space-x-4">
+                        <span>Press Tab to accept completion</span>
+                        <span class="text-xs px-2 py-1 bg-gray-700 rounded">AI Assisted</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="/static/js/editor.js"></script>
 </body>
 </html>
